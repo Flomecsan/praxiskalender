@@ -51,7 +51,22 @@
   const ui = { date: null, mode: 'day', view: 0, weekRes: null, page: 'kalender' };
 
   // ---------- Grundbausteine ----------
-  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2200); }
+  function toast(msg, undo) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h);
+    if (undo) { const b = document.createElement('button'); b.className = 'undo'; b.textContent = 'Rückgängig'; b.onclick = () => { t.classList.remove('on'); undo(); }; t.append(' ', b); }
+    t._h = setTimeout(() => t.classList.remove('on'), undo ? 8000 : 2200);
+  }
+  // Absage/Löschen mit „Rückgängig“ im Hinweis (8 s)
+  function undoFor(a) {
+    const snap = JSON.parse(JSON.stringify(a));
+    return () => {
+      const i = st().appts.findIndex(x => x.id === snap.id);
+      if (i >= 0) st().appts[i] = snap; else st().appts.push(snap);
+      const hadVideo = !!snap.video; snap.video = null;
+      P.reindex(); save(); rerender(); toast('rückgängig gemacht');
+      if (hadVideo) videoAfterBook(snap);
+    };
+  }
   function dialog(title, body, buttons) {
     $('#dlgTitle').textContent = title; $('#dlgBody').innerHTML = ''; $('#dlgFoot').innerHTML = ''; $('#dlg').style.width = '';
     if (typeof body === 'string') $('#dlgBody').innerHTML = body; else $('#dlgBody').appendChild(body);
@@ -135,8 +150,10 @@
     let txt;
     if (!a.typeId) txt = esc(a.title) + '; ' + P.fmtDur(partDur);
     else txt = (pat ? '<span class="att">' + esc(pat.last) + ', ' + esc(pat.first) + ';</span> ' : '') + esc(t ? t.name : '?') + (p.label ? ' - ' + esc(p.label) : '') + '; ' + P.fmtDur(partDur) + (f ? ' <b>' + esc(f) + '</b>' : '') + (a.note ? ' ' + esc(a.note) : '');
+    const vid = a.patientId && (a.video || isVideoAppt(a)) ? '<span class="vid" title="Videosprechstunde">🎥</span>' : '';
+    const tip = [pat ? pat.last + ', ' + pat.first + ' (' + P.fmtDate(pat.birth) + ')' : a.title, P.fmtMin(a.start) + '–' + P.fmtMin((a.start + a.dur) % 1440) + ' Uhr · ' + (t ? t.name : 'Blocker'), a.patientId ? 'Status: ' + a.status + (pat ? ' · ' + pat.insurance : '') : '', f, a.note ? 'Notiz: ' + a.note : '', a.overbooked ? 'Überbuchung' : '', a.channel === 'online' ? 'online gebucht' : ''].filter(Boolean).join('\n');
     const cls = ['ev', a.typeId ? '' : 'blocker', a.status === 'fertig' ? 'done' : '', a.overbooked ? 'over' : ''].join(' ');
-    return `<div class="${cls}" data-id="${a.id}" style="top:${top}px;height:${ht}px;left:calc(${lane * w}% + 1px);width:calc(${w}% - 2px)"><div class="inner" style="background:${c.bg};border-color:${c.bd};color:${c.fg}">${corner}${st_}${cm}${txt}</div></div>`;
+    return `<div class="${cls}" data-id="${a.id}" title="${esc(tip)}" style="top:${top}px;height:${ht}px;left:calc(${lane * w}% + 1px);width:calc(${w}% - 2px)"><div class="inner" style="background:${c.bg};border-color:${c.bd};color:${c.fg}">${corner}${st_}${cm}${vid}${txt}</div></div>`;
   }
   // Status-Eckchen: Klick schaltet geplant → wartet → in Behandlung → fertig → geplant (ohne Fenster)
   const STATUS_CYCLE = { geplant: 'wartend', wartend: 'in Behandlung', 'in Behandlung': 'fertig', fertig: 'geplant', 'nicht erschienen': 'geplant' };
@@ -149,7 +166,7 @@
     const a = st().appts.find(x => x.id === id); if (!a || !a.patientId) return;
     a.status = STATUS_CYCLE[a.status] || 'geplant';
     if (a.status === 'wartend') a.arrivedAt = simIso(); if (a.status === 'geplant') delete a.arrivedAt;
-    save(); renderCalGrid(); if (ui.sideTab === 'wait' && !ui.bk) renderCalSide();
+    save(); renderCalGrid(); if (!ui.bk) renderCalSide();
   }
   // gleiche Terminart beim anderen Arzt: „Arztgespräch Kurz (FCB)“ → „Arztgespräch Kurz (MMS)“
   const typeBase = n => n.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -159,6 +176,66 @@
     const base = typeBase(t.name);
     return cfg().eventTypes.find(x => x.id !== t.id && !x.chainOnly && x.intern && typeKz(x.name) === kz && typeBase(x.name) === base && typeMatchesRes(x, resId)) || null;
   }
+  // ---------- Tagesüberblick oben rechts (Klick → Tagesliste / Wartezimmer / Absagen) ----------
+  function renderDaySum() {
+    const el = $('#calSum'); if (!el) return;
+    if (ui.mode !== 'day') { el.innerHTML = ''; return; }
+    const A = st().appts.filter(a => a.date === ui.date && a.patientId);
+    const n = s => A.filter(a => a.status === s).length, act = A.filter(a => a.status !== 'abgesagt').length;
+    const isToday = ui.date === TODAY();
+    el.innerHTML = `<span class="ds" data-tab="list" title="Termine an diesem Tag (ohne Absagen) – Klick: Tagesliste"><b>${act}</b> Termine</span>` +
+      (isToday ? `<span class="ds w" data-tab="wait" title="Patienten im Wartezimmer – Klick: Liste"><b>${n('wartend')}</b> warten</span><span class="ds b" title="gerade in Behandlung"><b>${n('in Behandlung')}</b> in Behandlung</span><span class="ds" title="fertig behandelt"><b>${n('fertig')}</b> fertig</span>` : '') +
+      (n('abgesagt') ? `<span class="ds x" data-cx="1" title="Absagen – Klick: Liste der Absagen"><b>${n('abgesagt')}</b> abgesagt</span>` : '') +
+      `<button class="icon help" id="calHelp" title="Hilfe & Legende (Taste ?)">?</button>`;
+    el.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { ui.sideTab = b.dataset.tab; if (!ui.bk) renderCalSide(); });
+    const cx = el.querySelector('[data-cx]'); if (cx) cx.onclick = () => $('#calCancelled').click();
+    el.querySelector('#calHelp').onclick = openHelp;
+  }
+  // ---------- Hilfe / Legende ----------
+  function openHelp() {
+    dialog('Hilfe & Legende', `<div class="cols helpcols"><div>
+      <h3>Im Kalender</h3><div class="kv">
+      <div>Klick in freie Zeit</div><div>neuer Termin genau dort</div>
+      <div>Klick auf Termin</div><div>öffnen: absagen, verschieben, Notiz, Video-Link</div>
+      <div>Maus auf Termin</div><div>alle Angaben auf einen Blick</div>
+      <div>Rechtsklick</div><div>Schnellmenü: Angekommen, Absagen, Blocker/Pause …</div>
+      <div>Eckchen oben rechts</div><div>Status weiterschalten: geplant → wartet ⏳ → in Behandlung ▶ → fertig ✓</div>
+      <div>Spaltenkopf</div><div>Wochenansicht dieses Arztes / Raums</div>
+      <div>Grün beim Buchen</div><div>hier ist die Terminart frei</div>
+      <div>Hellgrün beim Buchen</div><div>frei bei einem anderen Arzt – Klick wechselt automatisch</div>
+      </div>
+      <h3>Zeichen am Termin</h3><div class="kv">
+      <div>farbige Ecke</div><div>Privat / Selbstzahler, blau = online gebucht</div>
+      <div>Sprechblase</div><div>Notiz oder Angaben vorhanden</div>
+      <div>🎥</div><div>Videosprechstunde – Link im Termin</div>
+      <div><span class="sw" style="background:#a0186a"></span> Puffer</div><div>Notfallzeit, wird erst am selben Tag (10 h vorher) frei</div>
+      <div>rot umrandet</div><div>Überbuchung („trotzdem eingetragen“)</div>
+      <div>blass</div><div>fertig behandelt</div>
+      </div></div><div>
+      <h3>Tastatur</h3><div class="kv">
+      <div><kbd>←</kbd> <kbd>→</kbd></div><div>Tag zurück / vor</div>
+      <div><kbd>H</kbd></div><div>heute</div>
+      <div><kbd>N</kbd></div><div>neuer Termin</div>
+      <div><kbd>F</kbd></div><div>Terminsuche</div>
+      <div><kbd>W</kbd></div><div>Tag / Woche umschalten</div>
+      <div><kbd>Esc</kbd></div><div>Buchung abbrechen</div>
+      <div><kbd>?</kbd></div><div>diese Hilfe</div>
+      </div>
+      <h3>Gut zu wissen</h3><p class="muted" style="max-width:330px">Absagen und Löschen lassen sich 8 Sekunden lang mit „Rückgängig“ im gelben Hinweis zurücknehmen.<br><br>Geburtsdatum kurz tippen: 120385 = 12.03.1985.<br><br>Oben rechts: wie viele Termine, wer wartet, wer gerade drin ist – anklicken öffnet die Liste.<br><br>Etwas klappt nicht? Knopf „Feedback“ oben.</p>
+      </div></div>`, [{ label: 'Schließen' }]);
+  }
+  // ---------- Tastatur (nur im Kalender, nicht beim Tippen) ----------
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || ui.page !== 'kalender') return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '') || e.target.isContentEditable || $('#dlg').open || $('#dlg2').open || document.querySelector('.menu')) return;
+    const k = e.key.toLowerCase();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); $(e.key === 'ArrowLeft' ? '#calPrev' : '#calNext').click(); }
+    else if (k === 'h' || k === 't') $('#calToday').click();
+    else if (k === 'n' && !ui.bk) openNewAppt({ date: ui.date });
+    else if (k === 'f' || k === '/') { e.preventDefault(); $('#calSearch').focus(); }
+    else if (k === 'w') $(ui.mode === 'day' ? '#calWeek' : '#calDay').click();
+    else if (e.key === '?') openHelp();
+  });
   function renderCal() { renderCalGrid(); renderCalSide(); }
   // Buchbare Startzeiten der Terminart im Buchungsfenster (samedi: bookable_times-layer)
   function bookableMap(cols) {
@@ -182,6 +259,7 @@
     if (ui.mode === 'week') wr.innerHTML = cfg().resources.filter(r => !r.hidden).map(r => `<option value="${r.id}" ${r.id === ui.weekRes ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
     $('#calDay').classList.toggle('on', ui.mode === 'day'); $('#calWeek').classList.toggle('on', ui.mode === 'week');
     const [y, mo, d] = ui.date.split('-');
+    renderDaySum();
     $('#calTitle').innerHTML = ui.mode === 'week'
       ? `<b>KW ${isoWeek(ui.date)}</b> ${esc((resOf(ui.weekRes) || {}).name || '')}`
       : `<b>${P.weekday(ui.date)}.</b> ${d}.${mo}.${y} <span class="kw">KW ${isoWeek(ui.date)}</span>`;
@@ -307,12 +385,13 @@
     initRecent();
     const [y, m] = ui.date.split('-').map(Number);
     const n2 = m === 12 ? [y + 1, 1] : [y, m + 1];
-    const tabs = [['recent', 'personClock', 'Zuletzt verwendete Patienten'], ['todo', 'clip', 'Todo-Listen'], ['list', 'list', 'Terminliste des Tages'], ['wait', 'peopleArrows', 'Wartezimmer'], ['recall', 'alarm', 'Recall fällig']];
+    const tdy = TODAY(), nWait = st().appts.filter(a => a.date === tdy && a.status === 'wartend').length, nRec = st().recalls.filter(r => !r.done && r.due <= tdy).length;
+    const tabs = [['recent', 'personClock', 'Zuletzt verwendete Patienten', 'Zuletzt'], ['list', 'list', 'Terminliste des angezeigten Tages', 'Tagesliste'], ['wait', 'peopleArrows', 'Wartezimmer (heute angekommen)', 'Wartezimmer', nWait], ['recall', 'alarm', 'Recall fällig', 'Recall', nRec], ['todo', 'clip', 'Todo-Listen', 'Todos']];
     ui.sideTab = ui.sideTab || 'recent';
     $('#calSide').innerHTML = `<div class="mcHead"><button id="mPrev">‹</button><span class="mt">${MONTHS[m - 1]} <span>${y} ˅</span></span><span class="today" id="mToday" style="cursor:pointer">${+TODAY().slice(8)}.${+TODAY().slice(5, 7)}.</span><span class="mt">${MONTHS[n2[1] - 1]} <span>${n2[0]} ˅</span></span><button id="mNext">›</button></div>
       <div class="mcs">${miniMonth(y, m, ui.date)}<div style="width:1px;background:var(--line)"></div>${miniMonth(n2[0], n2[1], ui.date)}</div>
       <div class="sideBtns"><button id="sbTermin">${icon('calPlus')}Termin</button><button id="sbKette">${icon('calLink')}Terminkette</button></div>
-      ${ui.bk ? '<div id="bkPanel"></div>' : `<div class="sideTabs">${tabs.map(([k, ic, tt]) => `<button data-tab="${k}" title="${tt}" class="${ui.sideTab === k ? 'on' : ''}">${icon(ic)}</button>`).join('')}</div>
+      ${ui.bk ? '<div id="bkPanel"></div>' : `<div class="sideTabs">${tabs.map(([k, ic, tt, lb, n]) => `<button data-tab="${k}" title="${tt}" class="${ui.sideTab === k ? 'on' : ''}">${icon(ic)}<span class="stl">${lb}</span>${n ? `<span class="badge">${n}</span>` : ''}</button>`).join('')}</div>
       <div id="sideList"></div>`}`;
     $('#calSide').querySelectorAll('td[data-d]').forEach(td => td.onclick = () => { ui.date = td.dataset.d; if (ui.bk) { renderCalGrid(); renderCalSideMonths(); } else renderCal(); });
     $('#mPrev').onclick = () => { ui.date = P.addDays(ui.date.slice(0, 8) + '01', -1).slice(0, 8) + '01'; calNav(); };
@@ -378,7 +457,7 @@
       { label: 'Verschieben …', onClick: () => { openAppt(id); const n = $('#mNext'); if (n) n.focus(); } },
       { label: 'Folgetermin buchen …', onClick: () => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: P.addDays(a.date, 7), start: a.start }) },
       { label: 'Patientenakte …', onClick: () => openPatient(a.patientId) });
-    else items.push({ label: 'Blocker löschen', onClick: () => ask('Blocker löschen', '„' + esc(a.title) + '“ entfernen?', 'Löschen', () => { releaseVideo(a); P.remove(a.id); renderCal(); toast('Blocker gelöscht'); }) });
+    else items.push({ label: 'Blocker löschen', onClick: () => ask('Blocker löschen', '„' + esc(a.title) + '“ entfernen?', 'Löschen', () => { const undo = undoFor(a); releaseVideo(a); P.remove(a.id); renderCal(); toast('Blocker gelöscht', undo); }) });
     popMenu(pos, items);
   }
   const BLOCKER_PRESETS = ['Pause', 'Teambesprechung', 'Admin / Doku', 'Rückrufe', 'Hausbesuch', 'Pflegeheim-Visite', 'Urlaub', 'Fortbildung', 'Laborfahrer kommt', 'Notfall'];
@@ -810,8 +889,8 @@
       body.querySelector('#mNext').onclick = () => { const s = P.findSlots(a.typeId, body.querySelector('#mDate').value, { days: 30, max: 1, fromMin: P.parseHM(body.querySelector('#mTime').value) + 5, ignoreAppt: a.id, patient: p })[0]; if (!s) return toast('nichts frei in 30 Tagen'); body.querySelector('#mDate').value = s.date; body.querySelector('#mTime').value = P.fmtMin(s.start); check(); };
     }
     dialog(t ? 'Termin' : 'Blocker', body, [
-      { label: 'Löschen', cls: 'danger', keep: true, onClick: () => ask('Termin löschen', 'Termin endgültig löschen? (Absagen behält ihn in der Absage-Liste.)', 'Löschen', () => { P.remove(a.id); closeDlg(); rerender(); }) },
-      ...(a.patientId ? [{ label: 'Absagen', keep: true, onClick: () => { dialog2('Termin absagen', `<div class="kv"><div>Termin</div><div>${P.fmtDate(a.date, true)} ${P.fmtMin(a.start)} · ${esc(t ? t.name : '')}</div><div>Patient</div><div>${esc(patLabel(p))}</div></div><label>Grund</label><select id="cxR" style="width:100%"><option>Patient hat telefonisch abgesagt</option><option>Patient hat online abgesagt</option><option>Praxis sagt ab (Arzt verhindert)</option><option>Patient krank</option><option>Termin verschoben</option></select><label>Bemerkung</label><input id="cxN" style="width:100%"><label><input type="checkbox" id="cxF" checked> danach Folgetermin für den Patienten suchen</label>`, [{ label: 'Abbrechen' }, { label: 'Termin absagen', cls: 'primary', onClick: B => { releaseVideo(a); a.status = 'abgesagt'; a.cancelReason = B.querySelector('#cxR').value + (B.querySelector('#cxN').value ? ' – ' + B.querySelector('#cxN').value : ''); a.cancelledAt = simIso(); const again = B.querySelector('#cxF').checked; save(); closeDlg(); rerender(); toast('abgesagt – Slot wieder frei'); if (again) defer(() => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: a.date, start: a.start }), 50); } }]); } },
+      { label: 'Löschen', cls: 'danger', keep: true, onClick: () => ask('Termin löschen', 'Termin endgültig löschen? (Absagen behält ihn in der Absage-Liste.)', 'Löschen', () => { const undo = undoFor(a); releaseVideo(a); P.remove(a.id); closeDlg(); rerender(); toast(a.patientId ? 'Termin gelöscht' : 'Blocker gelöscht', undo); }) },
+      ...(a.patientId ? [{ label: 'Absagen', keep: true, onClick: () => { dialog2('Termin absagen', `<div class="kv"><div>Termin</div><div>${P.fmtDate(a.date, true)} ${P.fmtMin(a.start)} · ${esc(t ? t.name : '')}</div><div>Patient</div><div>${esc(patLabel(p))}</div></div><label>Grund</label><select id="cxR" style="width:100%"><option>Patient hat telefonisch abgesagt</option><option>Patient hat online abgesagt</option><option>Praxis sagt ab (Arzt verhindert)</option><option>Patient krank</option><option>Termin verschoben</option></select><label>Bemerkung</label><input id="cxN" style="width:100%"><label><input type="checkbox" id="cxF" checked> danach Folgetermin für den Patienten suchen</label>`, [{ label: 'Abbrechen' }, { label: 'Termin absagen', cls: 'primary', onClick: B => { const undo = undoFor(a); releaseVideo(a); a.status = 'abgesagt'; a.cancelReason = B.querySelector('#cxR').value + (B.querySelector('#cxN').value ? ' – ' + B.querySelector('#cxN').value : ''); a.cancelledAt = simIso(); const again = B.querySelector('#cxF').checked; save(); closeDlg(); rerender(); toast('Termin abgesagt – Zeit ist wieder frei', undo); if (again) defer(() => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: a.date, start: a.start }), 50); } }]); } },
         { label: 'Folgetermin', onClick: () => { defer(() => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: P.addDays(a.date, 7), start: a.start }), 50); } }] : []),
       { label: 'Schließen' },
       { label: 'Speichern', cls: 'primary', onClick: () => { saveSimple(); save(); rerender(); } },
@@ -1339,7 +1418,7 @@
   }
 
   // Test-Schnittstelle für die MFA-Szenarien (tests/mfa-szenarien.js)
-  window.PKPUI = { ui, go, openFeedback, feedbackContext, openNewAppt, openAppt, openPatient, renderCal, renderCalGrid, closeBooking, closeDlg, quickPatient, affectedDialog, setResStatus, TODAY };
+  window.PKPUI = { ui, go, openFeedback, feedbackContext, openNewAppt, openAppt, openPatient, renderCal, renderCalGrid, closeBooking, closeDlg, quickPatient, affectedDialog, setResStatus, TODAY, openHelp, renderDaySum };
 
   // ---------- Start ----------
   try { const th = localStorage.getItem('pkp_theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { }

@@ -1,4 +1,4 @@
-// MFA-Alltag: 35 Szenarien, die über die Oberfläche klicken und das Ergebnis prüfen.
+// MFA-Alltag: 50 Szenarien, die über die Oberfläche klicken und das Ergebnis prüfen.
 // Start im Browser (Konsole oder per Werkzeug):  runMfaSzenarien()
 // Achtung: setzt die Testdaten zurück (frische 100 Testpatienten).
 (function () {
@@ -306,6 +306,105 @@
       assert(U.ui.bk.typeId === tM, 'Terminart nicht gewechselt: ' + X().types.get(U.ui.bk.typeId).name);
       fillFields($('#bkPanel')); assert(/Frei/.test(evalTxt()), 'nicht frei: ' + evalTxt()); book($('#bkPanel'));
       assert(apptAt(pat(50).id, s.date, s.start), 'nicht gebucht'); return 'gewechselt auf ' + X().types.get(tM).name + ', ' + P.fmtMin(s.start);
+    });
+    // ===== 36–50: Video, Rückgängig, Tastatur, Überblick =====
+    const key = (k, target) => (target || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    const undoBtn = () => $('#toast.on .undo');
+    function bookAt(typeId, p, date) {
+      const s = firstFree(typeId, date || D0); assert(s, 'nichts frei: ' + X().types.get(typeId).name);
+      const B = panel({ date: s.date, start: s.start, typeId }); pickPatient(B, p); fillFields(B); book(B);
+      const a = S().appts.find(x => x.patientId === p.id && x.date === s.date && x.start === s.start && x.status !== 'abgesagt'); assert(a, 'nicht gebucht'); return a;
+    }
+    function cancelViaDialog(a) { U.openAppt(a.id); click(btn($('#dlgFoot'), 'Absagen')); const cb = $('#cxF'); if (cb.checked) click(cb); click(btn($('#dlg2Foot'), 'Termin absagen')); }
+    // 36
+    run(36, 'Videosprechstunde buchen → Link kommt automatisch, E-Mail an Patient fertig', () => {
+      const p = pat(60); const a = bookAt(T('Videosprechstunde (FCB)'), p, D1);
+      assert(a.video && a.video.client, 'kein Video-Link');
+      U.openAppt(a.id); const mail = [...$$('#dlgBody a')].map(x => decodeURIComponent(x.href)).find(h => h.startsWith('mailto:'));
+      assert(mail && mail.includes(a.video.client), 'E-Mail ohne Link'); assert(mail.includes(p.email), 'E-Mail-Adresse fehlt');
+      const link = [...$$('#dlgBody a')].map(x => x.href).find(h => h.includes('redmedical') && h.includes(a.video.client)) || mail.match(/https:\/\/video[^\s]+/)[0];
+      assert(!link.includes(encodeURIComponent(p.last)) && !link.includes(p.last), 'Patientenname im Link'); assert($('#dlgBody').innerText.includes('Video starten'), 'Knopf „Video starten“ fehlt');
+      return 'Code ' + a.video.client + ' · Mail an ' + p.email;
+    });
+    // 37
+    run(37, 'Videotermin absagen → Link ungültig; „Rückgängig“ → Termin + neuer Link', () => {
+      const a = bookAt(T('Videosprechstunde (FCB)'), pat(61), D1); const old = a.video.client;
+      cancelViaDialog(a); let x = S().appts.find(y => y.id === a.id); assert(x.status === 'abgesagt' && !x.video, 'Link nicht entfernt');
+      assert(undoBtn(), 'kein Rückgängig-Knopf'); click(undoBtn());
+      x = S().appts.find(y => y.id === a.id); assert(x.status === 'geplant', 'nicht wiederhergestellt: ' + x.status); assert(x.video && x.video.client !== old, 'kein neuer Link');
+      return 'alt ' + old + ' → neu ' + x.video.client;
+    });
+    // 38
+    run(38, 'Videotermin auf anderen Tag verschieben → neuer Link für den neuen Tag', () => {
+      const tid = T('Videosprechstunde (FCB)'); const a = bookAt(tid, pat(62), D0); const old = a.video.client;
+      const s = P.findSlots(tid, P.addDays(D1, 1), { days: 14, max: 1, ignoreAppt: a.id })[0]; assert(s, 'kein Ausweichtag');
+      U.openAppt(a.id); setVal($('#mDate'), s.date); setVal($('#mTime'), P.fmtMin(s.start)); click($('#mCheck')); assert($('#mDo'), 'nicht frei: ' + $('#mEval').innerText); click($('#mDo'));
+      const x = S().appts.find(y => y.id === a.id); assert(x.date === s.date, 'nicht verschoben'); assert(x.video && x.video.date === s.date && x.video.client !== old, 'Link nicht erneuert');
+      return P.fmtDate(s.date) + ', neuer Code ' + x.video.client;
+    });
+    // 39
+    run(39, 'Versehentlich abgesagt → „Rückgängig“ im gelben Hinweis', () => {
+      const a = bookAt(T('Arztgespräch Kurz (FCB)'), pat(63), D1); cancelViaDialog(a);
+      assert(/abgesagt/.test($('#toast').textContent), 'Hinweis fehlt'); click(undoBtn());
+      const x = S().appts.find(y => y.id === a.id); assert(x.status === 'geplant' && !x.cancelReason, 'nicht zurück'); return 'wieder geplant ' + P.fmtMin(x.start);
+    });
+    // 40
+    run(40, 'Termin gelöscht → „Rückgängig“ holt ihn zurück', () => {
+      const a = bookAt(T('Arztgespräch Kurz (FCB)'), pat(64), D1); U.openAppt(a.id); click(btn($('#dlgFoot'), 'Löschen')); click(btn($('#dlg2Foot'), 'Löschen'));
+      assert(!S().appts.some(y => y.id === a.id), 'nicht gelöscht'); click(undoBtn()); assert(S().appts.some(y => y.id === a.id), 'nicht zurückgeholt'); return 'ok';
+    });
+    // 41
+    run(41, 'Tastatur: → nächster Tag, ← zurück, H = heute', () => {
+      key('ArrowRight'); const d1 = U.ui.date; key('ArrowRight'); key('ArrowLeft'); const d2 = U.ui.date; key('h');
+      assert(d1 > D0 && d2 === d1, 'Pfeile: ' + d1 + '/' + d2); assert(U.ui.date === D0, 'H nicht heute: ' + U.ui.date); return D0 + ' → ' + d1 + ' → ' + U.ui.date;
+    });
+    // 42
+    run(42, 'Taste N öffnet neuen Termin, Esc bricht ab', () => {
+      key('n'); assert(U.ui.bk && $('#bkPanel'), 'Buchungsfenster nicht offen'); key('Escape'); assert(!U.ui.bk, 'nicht geschlossen'); return 'ok';
+    });
+    // 43
+    run(43, '? öffnet Hilfe; Tippen im Suchfeld löst keine Tasten aus', () => {
+      key('?'); assert($('#dlg').open && /Legende/.test($('#dlgTitle').textContent), 'Hilfe nicht offen'); closeAll();
+      const inp = $('#calSearch'); inp.focus(); key('n', inp); assert(!U.ui.bk, 'N im Suchfeld hat Buchung geöffnet'); inp.blur(); return 'ok';
+    });
+    // 44
+    run(44, 'Patient kommt an → oben „warten“ +1 und Zähler am Reiter Wartezimmer', () => {
+      const cnt = () => +(($('#calSum .ds.w b') || {}).textContent || 0);
+      const a = bookAt(T('Arztgespräch Kurz (FCB)'), pat(65), D0); U.renderCal(); const before = cnt();
+      click($(`.ev[data-id="${a.id}"] .stx.act`)); assert(a.status === 'wartend' || S().appts.find(y => y.id === a.id).status === 'wartend', 'nicht wartend');
+      assert(cnt() === before + 1, 'Zähler ' + before + ' → ' + cnt()); const badge = $('.sideTabs [data-tab="wait"] .badge'); assert(badge && +badge.textContent === cnt(), 'Reiter-Zähler fehlt');
+      return 'warten: ' + cnt();
+    });
+    // 45
+    run(45, 'Klick auf „warten“ oben → Wartezimmer-Liste mit dem Patienten', () => {
+      const p = pat(66); const a = bookAt(T('Arztgespräch Kurz (FCB)'), p, D0); U.renderCal(); click($(`.ev[data-id="${a.id}"] .stx.act`));
+      click($('#calSum .ds.w')); assert(U.ui.sideTab === 'wait', 'Reiter nicht gewechselt'); assert($('#sideList').innerText.includes(p.last), 'Patient nicht in der Liste'); return 'ok';
+    });
+    // 46
+    run(46, 'Maus auf Termin zeigt Name, Geburtsdatum, Uhrzeit, Status', () => {
+      const p = pat(67); const a = bookAt(T('Arztgespräch Kurz (FCB)'), p, D0); U.renderCal();
+      const tip = $(`.ev[data-id="${a.id}"]`).title; assert(tip.includes(p.last) && tip.includes(P.fmtDate(p.birth)) && tip.includes(P.fmtMin(a.start)) && /Status: geplant/.test(tip), 'Info unvollständig: ' + tip);
+      return tip.split('\n').slice(0, 2).join(' | ');
+    });
+    // 47
+    run(47, 'Krankschreibung per Video (Arzt egal) → Arzt zugeordnet + Video-Link', () => {
+      const a = bookAt(T('Krankschreibung über Videosprechstunde (Arzt egal)'), pat(68), D0);
+      assert(a.video, 'kein Video-Link'); U.renderCal(); assert($(`.ev[data-id="${a.id}"] .vid`), 'kein 🎥 am Termin'); return 'bei ' + (X().types.get(a.viaType || a.typeId) || {}).name;
+    });
+    // 48
+    run(48, 'Absagen oben gezählt, Klick öffnet die Absage-Liste', () => {
+      const a = bookAt(T('Arztgespräch Kurz (FCB)'), pat(69), D0); cancelViaDialog(a); closeAll(); U.renderCal();
+      const x = $('#calSum .ds.x'); assert(x, 'kein Absage-Zähler'); click(x); assert($('#dlg').open && /abgesagt/i.test($('#dlgTitle').textContent), 'Liste nicht offen'); return x.textContent;
+    });
+    // 49
+    run(49, 'Spaltenköpfe zweizeilig, voller Name bei Maus drauf', () => {
+      const h = $$('.colhead[data-res]'); assert(h.length > 3, 'keine Spalten'); const cut = h.filter(e => e.scrollHeight > e.clientHeight + 14);
+      assert(h.every(e => e.title && e.title.length > 2), 'Titel fehlt'); return h.length + ' Spalten, ' + cut.length + ' gekürzt';
+    });
+    // 50
+    run(50, 'Seitenreiter mit Text statt nur Symbol', () => {
+      const t = $$('.sideTabs button').map(b => b.innerText.trim()); assert(['Zuletzt', 'Tagesliste', 'Wartezimmer', 'Recall', 'Todos'].every(x => t.some(y => y.startsWith(x))), 'Reiter: ' + t.join(','));
+      return t.join(' · ');
     });
     closeAll(); $('#calSearch').value = ''; U.ui.date = D0; U.go('kalender');
     const ok = results.filter(r => r.ok).length;
