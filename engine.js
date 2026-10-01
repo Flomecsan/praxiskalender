@@ -75,10 +75,8 @@
       settings: { v2: true, simNow: '', dayStart: 6 * 60, dayEnd: 21 * 60, pxPerMin: 3, ignoreInternBookahead: false, hardInsurance: false },
     };
     S.state = st; reindex();
-    seedPatients(st);
-    seedRecall(st);
-    seedAppointments(st);
-    seedTodos(st);
+    S.quiet = true; // beim Erzeugen der Testdaten nicht jede Buchung einzeln speichern/senden
+    try { seedPatients(st); seedRecall(st); seedAppointments(st); seedTodos(st); } finally { S.quiet = false; }
     return st;
   }
 
@@ -99,13 +97,31 @@
     ];
   }
 
+  // Persönliche Einstellungen (Zoom, simulierte Uhrzeit …) bleiben immer im eigenen Browser
+  const SETTINGS_KEY = 'pkp_settings_v1';
+  const remote = () => !!(window.PKPSync && window.PKPSync.remote);
+  function loadSettings(def) { try { return Object.assign({}, def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { return def; } }
   function load() {
+    if (remote()) {
+      // Mehrbenutzerbetrieb: Stand kommt vom Server (PKPSync hat ihn schon geladen)
+      const st = window.PKPSync.buildState();
+      st.settings = loadSettings({ v2: true, simNow: '', dayStart: 6 * 60, dayEnd: 21 * 60, pxPerMin: 3, ignoreInternBookahead: false, hardInsurance: false });
+      S.state = st; reindex(); return st;
+    }
     try { const raw = localStorage.getItem(STORE_KEY); if (raw) { S.state = JSON.parse(raw); reindex(); return S.state; } } catch (e) { console.warn(e); }
     const st = freshState(); save(); return st;
   }
-  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S.state)); } catch (e) { console.warn('Speichern fehlgeschlagen', e); } }
-  function reset() { try { localStorage.removeItem(STORE_KEY); } catch (e) { } const st = freshState(); save(); return st; }
-  function nextId(prefix) { return prefix + (S.state.seq++); }
+  function save() {
+    if (S.quiet) return;
+    if (remote()) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(S.state.settings)); } catch (e) { } window.PKPSync.push(S.state); return; }
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(S.state)); } catch (e) { console.warn('Speichern fehlgeschlagen', e); }
+  }
+  function reset() {
+    if (remote()) { const keep = S.state && S.state.settings; const st = freshState(); if (keep) st.settings = keep; window.PKPSync.uploadAll(st); reindex(); return st; }
+    try { localStorage.removeItem(STORE_KEY); } catch (e) { } const st = freshState(); save(); return st;
+  }
+  // IDs müssen über alle Rechner eindeutig sein (Zeit + Zufall statt fortlaufender Zähler)
+  function nextId(prefix) { S.state.seq = (S.state.seq || 1) + 1; return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
   // ---------- Indizes ----------
   function reindex() {

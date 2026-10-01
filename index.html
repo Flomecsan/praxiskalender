@@ -214,6 +214,13 @@ button:disabled{opacity:.45;cursor:default}
 #splitter:hover,#splitter.drag{background:#c6dbf5}
 #bkSplit{height:6px;flex:none;cursor:row-resize;background:#eef2f7;border-top:1px solid #d0d7e2;border-bottom:1px solid #d0d7e2}
 #bkSplit:hover,#bkSplit.drag{background:#c6dbf5}
+
+#syncBox{display:flex;gap:6px;align-items:center;margin-right:10px;white-space:nowrap}
+#syncBox .pill{background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:3px 9px;font-size:12px;cursor:default}
+#syncBox .pill.user{cursor:pointer}
+#syncBox .pill.test{background:#c0392b;font-weight:700}
+#syncBox .pill.demo{background:rgba(255,255,255,.08);color:#c9d6ea}
+#syncInfo{color:#ffe08a;font-size:12px;transition:opacity .4s;opacity:0}
 @media print{nav#top,#calSide,#calFoot,#calBar button{display:none!important} #calScroll{overflow:visible}}
 </style>
 </head>
@@ -231,6 +238,7 @@ button:disabled{opacity:.45;cursor:default}
   <a data-page="todos" data-ico="check">Todos</a>
   <span class="spacer"></span>
   <a class="tbtn fb" id="fbBtn" title="Feedback: Was geht noch nicht?" data-ico="bubble"><span>Feedback</span></a>
+  <span id="syncBox"></span>
   <span class="clock" id="clock"></span>
   <a class="tbtn" data-page="einstellungen" data-ico="gear" title="Einstellungen"></a>
 </nav>
@@ -274,8 +282,10 @@ button:disabled{opacity:.45;cursor:default}
 <dialog id="dlg" class="xwin"><div class="dh"><span id="dlgTitle"></span><button id="dlgX" title="Schließen">✕</button></div><div class="db" id="dlgBody"></div><div class="df" id="dlgFoot"></div></dialog>
 <dialog id="dlg2" class="xwin" style="width:520px"><div class="dh"><span id="dlg2Title"></span><button id="dlg2X" title="Schließen">✕</button></div><div class="db" id="dlg2Body"></div><div class="df" id="dlg2Foot"></div></dialog>
 <div class="toast" id="toast"></div>
-<script src="data.js?v=1790879042"></script>
-<script src="engine.js?v=1790879042"></script>
-<script src="ui.js?v=1790879042"></script>
+<script src="data.js?v=1790890361"></script>
+<script src="vendor/msal-browser.min.js"></script>
+<script src="engine.js?v=1790890361"></script>
+<script src="sync.js?v=1790890361"></script>
+<script src="ui.js?v=1790890361"></script>
 </body>
 </html>

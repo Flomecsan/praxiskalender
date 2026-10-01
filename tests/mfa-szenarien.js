@@ -13,6 +13,7 @@
   const assert = (c, msg) => { if (!c) throw new Error(msg); };
 
   window.runMfaSzenarien = function () {
+    if (window.PKPSync && PKPSync.remote) throw new Error('Testreihe setzt Daten zurück – nur im Demo-Modus (?demo) ausführen');
     window.__syncDefer = true;
     const P = window.PKP, U = window.PKPUI;
     const S = () => P.S.state, X = () => P.S.idx;

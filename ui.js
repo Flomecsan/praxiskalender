@@ -737,6 +737,11 @@
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && ui.bk && !$('#dlg').open && !$('#dlg2').open) closeBooking(true); });
 
+  function apptMetaHtml(id) {
+    const m = window.PKPSync && PKPSync.remote && (PKPSync.meta.appts || {})[id]; if (!m) return '';
+    const who = x => esc(String(x || '?').split('@')[0]); const when = x => esc(String(x || '').replace('T', ' ').slice(0, 16));
+    return ' · von ' + who(m.createdBy) + (m.updatedBy && m.version > 1 ? ' · zuletzt geändert ' + when(m.updatedAt) + ' von ' + who(m.updatedBy) : '');
+  }
   // ---------- Termin-Details ----------
   function openAppt(id) {
     const a = st().appts.find(x => x.id === id); if (!a) return;
@@ -750,7 +755,7 @@
       ${Object.entries(a.fields || {}).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}
       <div>Notiz</div><div><input id="dNote" value="${esc(a.note)}" style="width:100%"></div>
       <div>Status</div><div><select id="dStatus">${STATUS.map(s => `<option ${s === a.status ? 'selected' : ''}>${s}</option>`).join('')}</select>${a.arrivedAt ? ' <span class="muted">angekommen ' + esc(a.arrivedAt.slice(11, 16)) + '</span>' : ''}</div>
-      <div>Angelegt</div><div class="muted">${esc((a.createdAt || '').replace('T', ' ').slice(0, 16))}</div>
+      <div>Angelegt</div><div class="muted">${esc((a.createdAt || '').replace('T', ' ').slice(0, 16))}${apptMetaHtml(a.id)}</div>
     </div>
     ${t ? `<h3>Verschieben</h3><div style="display:flex;gap:6px;align-items:end;flex-wrap:wrap"><div><label>Datum</label><input type="date" id="mDate" value="${a.date}"></div><div><label>Uhrzeit</label><input type="time" step="300" id="mTime" value="${P.fmtMin(a.start)}"></div><button id="mCheck">Prüfen</button><button id="mNext">Nächster freier</button></div><div id="mEval"></div>` : ''}`);
     const saveSimple = () => { a.note = body.querySelector('#dNote').value; const ns = body.querySelector('#dStatus').value; if (ns !== a.status) { if (ns === 'wartend' && !a.arrivedAt) a.arrivedAt = simIso(); a.status = ns; } };
@@ -1039,13 +1044,13 @@
   // EINSTELLUNGEN
   // =====================================================================
   let setTab = 'Allgemein', etQ = '';
-  const SETTABS = ['Allgemein', 'Ressourcen', 'Fähigkeiten', 'Terminarten', 'Terminketten', 'Verfügbarkeiten', 'Kontingente', 'Kommentar-Sets', 'Wartelisten', 'Abwesenheiten', 'Ansichten', 'Daten'];
+  const SETTABS = ['Feedback', 'Allgemein', 'Ressourcen', 'Fähigkeiten', 'Terminarten', 'Terminketten', 'Verfügbarkeiten', 'Kontingente', 'Kommentar-Sets', 'Wartelisten', 'Abwesenheiten', 'Ansichten', 'Daten'];
   function renderSettings() {
     const el = $('#p-einstellungen');
     el.innerHTML = `<div class="pad"><h2>Einstellungen</h2><div class="tabs">${SETTABS.map(t => `<button data-t="${t}" class="${t === setTab ? 'active' : ''}">${t}</button>`).join('')}</div><div id="setBody"></div></div>`;
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { setTab = b.dataset.t; renderSettings(); });
     const B = el.querySelector('#setBody');
-    ({ Allgemein: sAllg, Ressourcen: sRes, 'Fähigkeiten': sCaps, Terminarten: sTypes, Terminketten: sChains, 'Verfügbarkeiten': sAvail, Kontingente: sQuota, 'Kommentar-Sets': sComments, Wartelisten: sWl, Abwesenheiten: sAbs, Ansichten: sViews, Daten: sData })[setTab](B);
+    ({ Allgemein: sAllg, Ressourcen: sRes, 'Fähigkeiten': sCaps, Terminarten: sTypes, Terminketten: sChains, 'Verfügbarkeiten': sAvail, Kontingente: sQuota, 'Kommentar-Sets': sComments, Wartelisten: sWl, Abwesenheiten: sAbs, Ansichten: sViews, Daten: sData, Feedback: sFeedback })[setTab](B);
   }
   function sAllg(B) {
     const s = st().settings;
@@ -1184,10 +1189,18 @@
     B.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { if (st().views.length < 2) return; st().views.splice(+b.dataset.d, 1); ui.view = 0; save(); sViews(B); });
     B.querySelectorAll('[data-up]').forEach(b => b.onclick = () => { const i = +b.dataset.up; if (!i) return; const v = st().views; [v[i - 1], v[i]] = [v[i], v[i - 1]]; save(); sViews(B); });
   }
+  function sFeedback(B) {
+    if (!(window.PKPSync && PKPSync.remote)) { B.innerHTML = '<div class="card" style="max-width:640px"><p>Im Demo-Modus geht Feedback per E-Mail an ' + FEEDBACK_TO + '. Mit Server wird es hier zentral gesammelt.</p></div>'; return; }
+    B.innerHTML = '<p class="muted">lädt …</p>';
+    PKPSync.api('feedback').then(r => r.json()).then(d => {
+      B.innerHTML = `<table class="grid"><tr><th>#</th><th>Datum</th><th>Von</th><th>Art</th><th>Titel</th><th>Beschreibung</th><th>Status</th></tr>${d.items.map(f => `<tr><td>${f.id}</td><td>${esc(String(f.ts).slice(0, 16).replace('T', ' '))}</td><td>${esc(f.name || f.user)}<br><span class="muted">${esc(f.role || '')}</span></td><td>${esc(f.kind)}</td><td><b>${esc(f.title)}</b></td><td style="white-space:pre-wrap;max-width:420px">${esc(f.text)}${f.context ? '<details class="muted"><summary>Technik</summary>' + esc(f.context) + '</details>' : ''}</td><td><select data-fb="${f.id}" ${PKPSync.me.admin ? '' : 'disabled'}>${['neu', 'in Arbeit', 'eingebaut', 'abgelehnt'].map(x => `<option ${x === f.status ? 'selected' : ''}>${x}</option>`).join('')}</select></td></tr>`).join('') || '<tr><td colspan=7 class="muted">noch kein Feedback</td></tr>'}</table>`;
+      B.querySelectorAll('[data-fb]').forEach(sel => sel.onchange = () => PKPSync.api('feedback/' + sel.dataset.fb, { method: 'PATCH', body: JSON.stringify({ status: sel.value }) }).then(() => toast('Status gespeichert')));
+    });
+  }
   function sData(B) {
     B.innerHTML = `<div class="card" style="max-width:720px"><h3>Daten</h3><p>Alles liegt lokal im Browser (localStorage). ${st().patients.length} Patienten · ${st().appts.length} Termine · ${cfg().eventTypes.length} Terminarten · ${cfg().resources.length} Ressourcen.</p>
       <button id="dExp">Export (JSON)</button> <label style="display:inline;color:inherit"><button id="dImpB">Import (JSON)</button><input type="file" id="dImp" accept=".json" style="display:none"></label> <button id="dCfg">Nur Konfiguration exportieren</button>
-      <h3>Zurücksetzen</h3><p class="muted">Erzeugt Konfiguration aus dem samedi-Export neu, 100 frische Testpatienten und Testtermine (rund um das heutige Datum).</p><button class="danger" id="dReset">Alles zurücksetzen</button></div>`;
+      <h3>Zurücksetzen</h3><p class="muted">Erzeugt Konfiguration aus dem samedi-Export neu, 100 frische Testpatienten und Testtermine (rund um das heutige Datum).${window.PKPSync && PKPSync.remote ? ' <b class="bad">Achtung: gilt im Serverbetrieb für ALLE Rechner.</b>' : ''}</p><button class="danger" id="dReset">Alles zurücksetzen</button></div>`;
     const dl = (name, obj) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' })); a.download = name; a.click(); };
     B.querySelector('#dExp').onclick = () => dl('praxiskalender-prototyp-' + TODAY() + '.json', st());
     B.querySelector('#dCfg').onclick = () => dl('praxiskalender-konfiguration-' + TODAY() + '.json', cfg());
@@ -1263,10 +1276,11 @@
       <div class="cols" style="gap:8px"><div><label>Dein Name (optional)</label><input id="fbN" value="${esc(name)}" style="width:100%"></div><div><label>Rolle</label><select id="fbR" style="width:100%"><option>MFA</option><option>Ärztin/Arzt</option><option>Praxismanagement</option><option>Sonstige</option></select></div></div>
       <label><input type="checkbox" id="fbC" checked> technische Infos anhängen (Ansicht, Datum, offene Buchung, Fehlermeldungen)</label>
       <pre id="fbCtx" style="background:#fff;border:1px solid var(--ext-field);padding:4px 6px;font-size:10px;white-space:pre-wrap;max-height:90px;overflow:auto;margin:4px 0">${esc(ctx)}</pre>
-      <div class="muted" style="font-size:11px">Bitte <b>keine echten Patientendaten</b> eintragen – im Prototyp gibt es nur Testpatienten (T1001 …). Das Feedback geht als E-Mail an ${FEEDBACK_TO} und wird gesammelt eingebaut.</div>`,
+      <div class="muted" style="font-size:11px">Bitte <b>keine echten Patientendaten</b> eintragen – im Prototyp gibt es nur Testpatienten (T1001 …). ${window.PKPSync && PKPSync.remote ? 'Das Feedback wird zentral gespeichert und gesammelt eingebaut.' : 'Das Feedback geht als E-Mail an ' + FEEDBACK_TO + ' und wird gesammelt eingebaut.'}</div>`,
       [{ label: 'Abbrechen' },
        { label: 'Text kopieren', onClick: B => { const m = buildMail(B, ctx); if (!m) return false; const txt = 'An: ' + FEEDBACK_TO + '\nBetreff: ' + m.subject + '\n\n' + m.body; (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Text kopiert – bitte per Mail an ' + FEEDBACK_TO), () => { prompt('Bitte kopieren:', txt); }); return false; } },
-       { label: 'Per E-Mail senden', cls: 'primary', onClick: B => { const m = buildMail(B, ctx); if (!m) return false; location.href = 'mailto:' + FEEDBACK_TO + '?subject=' + encodeURIComponent(m.subject) + '&body=' + encodeURIComponent(m.body); toast('E-Mail-Programm geöffnet – bitte dort auf Senden'); } }]);
+       ...(window.PKPSync && PKPSync.remote ? [{ label: 'Absenden', cls: 'primary', onClick: B => { const m = buildMail(B, ctx); if (!m) return false; PKPSync.api('feedback', { method: 'POST', body: JSON.stringify({ kind: B.querySelector('#fbK').value, title: B.querySelector('#fbT').value.trim(), text: B.querySelector('#fbD').value.trim(), name: B.querySelector('#fbN').value.trim(), role: B.querySelector('#fbR').value, context: B.querySelector('#fbC').checked ? ctx : '' }) }).then(r => toast(r.ok ? 'Danke! Feedback gespeichert.' : 'Feedback konnte nicht gespeichert werden')); } }] : []),
+       { label: 'Per E-Mail senden', cls: window.PKPSync && PKPSync.remote ? '' : 'primary', onClick: B => { const m = buildMail(B, ctx); if (!m) return false; location.href = 'mailto:' + FEEDBACK_TO + '?subject=' + encodeURIComponent(m.subject) + '&body=' + encodeURIComponent(m.body); toast('E-Mail-Programm geöffnet – bitte dort auf Senden'); } }]);
     $('#dlg2').style.width = '640px';
     B.querySelector('#fbC').onchange = e => B.querySelector('#fbCtx').style.display = e.target.checked ? '' : 'none';
     B.querySelector('#fbT').focus();
@@ -1285,13 +1299,53 @@
   // ---------- Start ----------
   try { const th = localStorage.getItem('pkp_theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { }
   document.querySelectorAll('[data-ico]').forEach(el => { const n = el.dataset.ico; el.insertAdjacentHTML('afterbegin', icon(n)); });
-  setTimeout(() => {
+  // Start: erst Betriebsart klären (Server + Anmeldung oder Demo im Browser), dann laden
+  function loadingMsg(html) { const l = $('#loading'); l.style.display = 'flex'; l.innerHTML = '<div style="text-align:center;max-width:460px">' + html + '</div>'; return l; }
+  (async () => {
+    let mode = false;
+    try { mode = window.PKPSync ? await PKPSync.start() : false; }
+    catch (e) { loadingMsg('<b>Kalender nicht erreichbar</b><br><br>' + esc(e.message) + '<br><br><button onclick="location.reload()">Neu versuchen</button>'); return; }
+    if (mode === 'login') {
+      const l = loadingMsg('<img src="assets/wsh-logo.png" style="height:90px"><h2 style="margin:14px 0 6px">Praxiskalender</h2><p>Bitte mit dem WSH-Microsoft-Konto anmelden.</p><button class="primary" id="msLogin" style="font-size:14px;padding:8px 18px">Mit Microsoft anmelden</button>');
+      l.querySelector('#msLogin').onclick = () => PKPSync.login();
+      return;
+    }
     P.load();
     ui.date = TODAY();
     const se = st().settings; if (!se.v2) { se.v2 = true; se.pxPerMin = 3; se.dayStart = 6 * 60; se.dayEnd = 21 * 60; P.save(); }
     $('#loading').style.display = 'none';
     tickClock(); setInterval(() => { tickClock(); if (ui.page === 'warteliste') renderWaitlist(); }, 30000);
     $('#dlgX').onclick = closeDlg; initLayout(); $('#fbBtn').onclick = openFeedback;
+    if (PKPSync && PKPSync.remote) wireSync();
+    renderStatusBar();
     renderCal();
-  }, 20);
+  })();
+
+  // ---------- Mehrbenutzerbetrieb: Live-Aktualisierung, Online-Anzeige, Konflikte ----------
+  let rerenderTimer = null;
+  function rerenderRemote() {
+    clearTimeout(rerenderTimer);
+    rerenderTimer = setTimeout(() => {
+      if (ui.page === 'kalender') { if (ui.bk) bkEval(); renderCalGrid(); if (!ui.bk) renderCalSide(); else bkShowEval(); }
+      else if (ui.page === 'warteliste') renderWaitlist();
+      else if (!document.activeElement || !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) rerender();
+    }, 80);
+  }
+  function wireSync() {
+    PKPSync.on('remote', d => { rerenderRemote(); const n = d.ops.filter(o => o.col === 'appts').length; if (n && d.by) flashInfo(d.by + ' hat ' + (n === 1 ? 'einen Termin' : n + ' Termine') + ' geändert'); });
+    PKPSync.on('resync', () => { const keep = st().settings; P.load(); st().settings = keep; rerenderRemote(); });
+    PKPSync.on('presence', renderStatusBar);
+    PKPSync.on('status', renderStatusBar);
+    PKPSync.on('message', m => { dialog2('Hinweis', '<div style="padding:4px 0 8px">' + esc(m) + '</div>', [{ label: 'OK', cls: 'primary' }]); });
+  }
+  let infoTimer = null;
+  function flashInfo(t) { const el = $('#syncInfo'); if (!el) return; el.textContent = t; el.style.opacity = 1; clearTimeout(infoTimer); infoTimer = setTimeout(() => el.style.opacity = 0, 3500); }
+  function renderStatusBar() {
+    const box = $('#syncBox'); if (!box) return;
+    if (!(window.PKPSync && PKPSync.remote)) { box.innerHTML = '<span class="pill demo" title="Daten nur in diesem Browser. Mehrbenutzerbetrieb läuft über den Server.">Demo · nur dieser Browser</span>'; return; }
+    const on = PKPSync.presence.online || [], n = on.reduce((a, x) => a + x.count, 0);
+    const dot = { ok: '#5cd65c', speichert: '#ffd24d', offline: '#ff6b6b', fehler: '#ff6b6b' }[PKPSync.status] || '#bbb';
+    box.innerHTML = `${PKPSync.env && PKPSync.env.toUpperCase() !== 'PROD' ? '<span class="pill test" title="Testsystem: keine echten Patientendaten eintragen">TESTSYSTEM</span>' : ''}<span class="pill" title="${esc(on.map(x => x.name + (x.count > 1 ? ' (' + x.count + ' Fenster)' : '')).join(', '))}"><span style="color:${dot}">●</span> ${n} online</span><span class="pill user" id="meBtn" title="${esc(PKPSync.me.email)}">${esc(PKPSync.me.name)}</span><span id="syncInfo"></span>`;
+    $('#meBtn').onclick = e => popMenu(e.target, [{ label: 'Angemeldet als ' + PKPSync.me.email, onClick: () => { } }, { label: 'Abmelden', onClick: () => PKPSync.logout() }]);
+  }
 })();
