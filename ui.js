@@ -41,6 +41,7 @@
     list: '<path d="M9 7h11M9 12h11M9 17h11M4 7l1 1 2-2M4 12l1 1 2-2M4 17l1 1 2-2"/>',
     peopleArrows: '<circle cx="7" cy="6" r="2.2"/><circle cx="17" cy="6" r="2.2"/><path d="M5 20v-6l-1-3h6l-1 3v6M15 20v-6l-1-3h6l-1 3v6M10 15h4M12.5 13.5L14 15l-1.5 1.5M11.5 13.5L10 15l1.5 1.5"/>',
     arrowR: '<path d="M4 12h15M13 6l6 6-6 6"/>',
+    bubble: '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8 10h8M8 13h5"/>',
   };
   const icon = (n, cls) => `<svg class="ico ${cls || ''}" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
   const STATUS = ['geplant', 'wartend', 'in Behandlung', 'fertig', 'nicht erschienen'];
@@ -89,7 +90,7 @@
   function rerender() { render(ui.page); }
 
   // ---------- Navigation ----------
-  document.querySelectorAll('nav#top a').forEach(a => a.onclick = () => go(a.dataset.page));
+  document.querySelectorAll('nav#top a[data-page]').forEach(a => a.onclick = () => go(a.dataset.page));
   function go(page) {
     ui.page = page;
     document.querySelectorAll('nav#top a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
@@ -1233,8 +1234,53 @@
     makeSplitter(bar, () => pn.getBoundingClientRect().height, applyH, 'y');
   }
 
+  // ---------- Feedback: jeder meldet, was nicht geht → E-Mail mit festem Betreff (zentral im Postfach) ----------
+  const FEEDBACK_TO = 'florian.bonke@wirsindhausaerzte.de';
+  const FEEDBACK_TAG = '[Praxiskalender-Feedback]';
+  ui.errors = [];
+  window.addEventListener('error', e => { ui.errors.push((e.message || 'Fehler') + ' @' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || '')); ui.errors = ui.errors.slice(-5); });
+  window.addEventListener('unhandledrejection', e => { ui.errors.push('Promise: ' + String(e.reason && e.reason.message || e.reason)); ui.errors = ui.errors.slice(-5); });
+  function feedbackContext() {
+    const bk = ui.bk, n = P.splitAbs(P.nowAbs());
+    const lines = [
+      'Modul: ' + ui.page + (ui.page === 'kalender' ? ' · ' + (ui.mode === 'week' ? 'Woche ' + ((resOf(ui.weekRes) || {}).name || '') : 'Tag, Ansicht „' + ((st().views[ui.view] || {}).name || '') + '“') + ' · ' + P.fmtDate(ui.date, true) : ''),
+      'Uhrzeit im Prototyp: ' + P.fmtDate(n.date, true) + ' ' + P.fmtMin(n.min) + (st().settings.simNow ? ' (simuliert)' : ''),
+    ];
+    if (bk) lines.push('Offene Buchung: ' + ((typeOf(bk.typeId) || {}).name || (bk.blocker ? 'Blocker' : '–')) + ' · ' + P.fmtDate(bk.date) + ' ' + (bk.start != null ? P.fmtMin(bk.start) : '') + ' · Spalte ' + ((resOf(bk.resId) || {}).name || '–') + ' · Prüfung: ' + (bk.ev ? (bk.ev.ok ? 'frei' : (bk.ev.codes || []).map(c => c.code).join(',')) : '–'));
+    if ($('#dlg').open) lines.push('Offenes Fenster: ' + $('#dlgTitle').textContent);
+    if (ui.errors.length) lines.push('Fehlermeldungen: ' + ui.errors.join(' | '));
+    lines.push('Browser: ' + navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90) + ' · Fenster ' + innerWidth + '×' + innerHeight);
+    lines.push('Version: ' + (([...document.scripts].find(x => /ui\.js/.test(x.src)) || {}).src || '').split('v=')[1]);
+    return lines.join('\n');
+  }
+  function openFeedback() {
+    let name = ''; try { name = localStorage.getItem('pkp_fb_name') || ''; } catch (e) { }
+    const ctx = feedbackContext();
+    const B = dialog2('Feedback – was geht noch nicht?', `
+      <div class="cols" style="gap:8px"><div style="flex:0 0 170px;min-width:170px"><label>Art</label><select id="fbK" style="width:100%"><option>Fehler</option><option>Fehlt noch</option><option>Umständlich</option><option>Frage</option><option>Lob</option></select></div>
+      <div><label>Kurz in einem Satz *</label><input id="fbT" placeholder="z. B. Absagen bei Labor-Terminen geht nicht" style="width:100%"></div></div>
+      <label>Was hast du gemacht, was ist passiert, was hättest du erwartet?</label><textarea id="fbD" style="min-height:110px" placeholder="1. … 2. … – erwartet: …"></textarea>
+      <div class="cols" style="gap:8px"><div><label>Dein Name (optional)</label><input id="fbN" value="${esc(name)}" style="width:100%"></div><div><label>Rolle</label><select id="fbR" style="width:100%"><option>MFA</option><option>Ärztin/Arzt</option><option>Praxismanagement</option><option>Sonstige</option></select></div></div>
+      <label><input type="checkbox" id="fbC" checked> technische Infos anhängen (Ansicht, Datum, offene Buchung, Fehlermeldungen)</label>
+      <pre id="fbCtx" style="background:#fff;border:1px solid var(--ext-field);padding:4px 6px;font-size:10px;white-space:pre-wrap;max-height:90px;overflow:auto;margin:4px 0">${esc(ctx)}</pre>
+      <div class="muted" style="font-size:11px">Bitte <b>keine echten Patientendaten</b> eintragen – im Prototyp gibt es nur Testpatienten (T1001 …). Das Feedback geht als E-Mail an ${FEEDBACK_TO} und wird gesammelt eingebaut.</div>`,
+      [{ label: 'Abbrechen' },
+       { label: 'Text kopieren', onClick: B => { const m = buildMail(B, ctx); if (!m) return false; const txt = 'An: ' + FEEDBACK_TO + '\nBetreff: ' + m.subject + '\n\n' + m.body; (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Text kopiert – bitte per Mail an ' + FEEDBACK_TO), () => { prompt('Bitte kopieren:', txt); }); return false; } },
+       { label: 'Per E-Mail senden', cls: 'primary', onClick: B => { const m = buildMail(B, ctx); if (!m) return false; location.href = 'mailto:' + FEEDBACK_TO + '?subject=' + encodeURIComponent(m.subject) + '&body=' + encodeURIComponent(m.body); toast('E-Mail-Programm geöffnet – bitte dort auf Senden'); } }]);
+    $('#dlg2').style.width = '640px';
+    B.querySelector('#fbC').onchange = e => B.querySelector('#fbCtx').style.display = e.target.checked ? '' : 'none';
+    B.querySelector('#fbT').focus();
+  }
+  function buildMail(B, ctx) {
+    const kind = B.querySelector('#fbK').value, title = B.querySelector('#fbT').value.trim(), desc = B.querySelector('#fbD').value.trim(), name = B.querySelector('#fbN').value.trim(), role = B.querySelector('#fbR').value;
+    if (!title) { B.querySelector('#fbT').style.borderColor = '#c00'; toast('Bitte kurz beschreiben, worum es geht'); return null; }
+    try { localStorage.setItem('pkp_fb_name', name); } catch (e) { }
+    const body = [kind + ': ' + title, '', desc || '(keine weitere Beschreibung)', '', 'Von: ' + (name || 'anonym') + ' (' + role + ')', ...(B.querySelector('#fbC').checked ? ['', '--- technische Infos ---', ctx] : [])].join('\n');
+    return { subject: FEEDBACK_TAG + ' ' + kind + ': ' + title, body: body.slice(0, 1800) };
+  }
+
   // Test-Schnittstelle für die MFA-Szenarien (tests/mfa-szenarien.js)
-  window.PKPUI = { ui, go, openNewAppt, openAppt, openPatient, renderCal, renderCalGrid, closeBooking, closeDlg, quickPatient, affectedDialog, setResStatus, TODAY };
+  window.PKPUI = { ui, go, openFeedback, feedbackContext, openNewAppt, openAppt, openPatient, renderCal, renderCalGrid, closeBooking, closeDlg, quickPatient, affectedDialog, setResStatus, TODAY };
 
   // ---------- Start ----------
   try { const th = localStorage.getItem('pkp_theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { }
@@ -1245,7 +1291,7 @@
     const se = st().settings; if (!se.v2) { se.v2 = true; se.pxPerMin = 3; se.dayStart = 6 * 60; se.dayEnd = 21 * 60; P.save(); }
     $('#loading').style.display = 'none';
     tickClock(); setInterval(() => { tickClock(); if (ui.page === 'warteliste') renderWaitlist(); }, 30000);
-    $('#dlgX').onclick = closeDlg; initLayout();
+    $('#dlgX').onclick = closeDlg; initLayout(); $('#fbBtn').onclick = openFeedback;
     renderCal();
   }, 20);
 })();

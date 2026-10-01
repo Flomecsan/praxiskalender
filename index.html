@@ -47,6 +47,8 @@ nav#top .spacer{flex:1}
 nav#top .clock{font-size:12px;color:#c9d6ea;white-space:nowrap;margin-right:6px}
 nav#top .tbtn{color:#fff;padding:6px 8px}
 nav#top .tbtn .ico{width:20px;height:20px}
+nav#top .tbtn.fb{background:#f0ad4e;color:#1a1a1a;font-weight:700;margin-right:10px;padding:6px 12px}
+nav#top .tbtn.fb:hover{background:#ffc266}
 main{flex:1;min-height:0;display:flex;background:#fff}
 .page{flex:1;min-width:0;display:none;flex-direction:column;overflow:auto;background:#fff}
 .page.active{display:flex}
@@ -228,6 +230,7 @@ button:disabled{opacity:.45;cursor:default}
   <a data-page="online" data-ico="globe">Online-Buchung</a>
   <a data-page="todos" data-ico="check">Todos</a>
   <span class="spacer"></span>
+  <a class="tbtn fb" id="fbBtn" title="Feedback: Was geht noch nicht?" data-ico="bubble"><span>Feedback</span></a>
   <span class="clock" id="clock"></span>
   <a class="tbtn" data-page="einstellungen" data-ico="gear" title="Einstellungen"></a>
 </nav>
@@ -271,8 +274,8 @@ button:disabled{opacity:.45;cursor:default}
 <dialog id="dlg" class="xwin"><div class="dh"><span id="dlgTitle"></span><button id="dlgX" title="Schließen">✕</button></div><div class="db" id="dlgBody"></div><div class="df" id="dlgFoot"></div></dialog>
 <dialog id="dlg2" class="xwin" style="width:520px"><div class="dh"><span id="dlg2Title"></span><button id="dlg2X" title="Schließen">✕</button></div><div class="db" id="dlg2Body"></div><div class="df" id="dlg2Foot"></div></dialog>
 <div class="toast" id="toast"></div>
-<script src="data.js?v=1790877396"></script>
-<script src="engine.js?v=1790877396"></script>
-<script src="ui.js?v=1790877396"></script>
+<script src="data.js?v=1790879042"></script>
+<script src="engine.js?v=1790879042"></script>
+<script src="ui.js?v=1790879042"></script>
 </body>
 </html>
