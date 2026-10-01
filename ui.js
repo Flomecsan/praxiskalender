@@ -363,9 +363,9 @@
       const open = list.filter(a => a.status !== 'abgesagt').length;
       dialog('Betroffene Termine – ' + resOf(rid).name + ' ' + status, `<p>${list.length} Termine betroffen, davon <b>${open}</b> noch nicht bearbeitet. Patienten anrufen, dann absagen oder direkt umbuchen.</p>
         <table class="grid"><tr><th>Termin</th><th>Patient</th><th>Telefon</th><th>Terminart</th><th>Status</th><th></th></tr>${list.map(a => { const p = patOf(a.patientId); return `<tr><td>${P.fmtDate(a.date, true)} ${P.fmtMin(a.start)}</td><td>${esc(patLabel(p))}</td><td>${esc(p.phone)}${p.sms ? ' <span class="chip">SMS ok</span>' : ''}</td><td>${esc(typeOf(a.typeId)?.name || '')}</td><td>${a.status === 'abgesagt' ? '<span class="bad">abgesagt</span>' : esc(a.status)}</td><td style="white-space:nowrap">${a.status === 'abgesagt' ? '' : `<button class="small" data-x="${a.id}">absagen</button> <button class="small primary" data-u="${a.id}">absagen & neu buchen</button>`}</td></tr>`; }).join('') || '<tr><td colspan=6 class="muted">keine Termine betroffen</td></tr>'}</table>`,
-        [{ label: 'Alle offenen absagen', onClick: () => { list.forEach(a => { if (a.status !== 'abgesagt') { a.status = 'abgesagt'; a.cancelReason = reason; a.cancelledAt = simIso(); } }); save(); renderCal(); toast('alle abgesagt'); } }, { label: 'Schließen', onClick: () => renderCal() }]);
-      $('#dlgBody').querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const a = list.find(x => x.id === b.dataset.x); a.status = 'abgesagt'; a.cancelReason = reason; a.cancelledAt = simIso(); save(); render(); });
-      $('#dlgBody').querySelectorAll('[data-u]').forEach(b => b.onclick = () => { const a = list.find(x => x.id === b.dataset.u); a.status = 'abgesagt'; a.cancelReason = reason + ' – umgebucht'; a.cancelledAt = simIso(); save(); closeDlg(); renderCal(); ui.afterBook = () => affectedDialog(rid, from, to, status); defer(() => openNewAppt({ patientId: a.patientId, date: a.date, start: a.start, typeId: a.typeId }), 50); });
+        [{ label: 'Alle offenen absagen', onClick: () => { list.forEach(a => { if (a.status !== 'abgesagt') { releaseVideo(a); a.status = 'abgesagt'; a.cancelReason = reason; a.cancelledAt = simIso(); } }); save(); renderCal(); toast('alle abgesagt'); } }, { label: 'Schließen', onClick: () => renderCal() }]);
+      $('#dlgBody').querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const a = list.find(x => x.id === b.dataset.x); releaseVideo(a); a.status = 'abgesagt'; a.cancelReason = reason; a.cancelledAt = simIso(); save(); render(); });
+      $('#dlgBody').querySelectorAll('[data-u]').forEach(b => b.onclick = () => { const a = list.find(x => x.id === b.dataset.u); releaseVideo(a); a.status = 'abgesagt'; a.cancelReason = reason + ' – umgebucht'; a.cancelledAt = simIso(); save(); closeDlg(); renderCal(); ui.afterBook = () => affectedDialog(rid, from, to, status); defer(() => openNewAppt({ patientId: a.patientId, date: a.date, start: a.start, typeId: a.typeId }), 50); });
     };
     render();
   }
@@ -378,7 +378,7 @@
       { label: 'Verschieben …', onClick: () => { openAppt(id); const n = $('#mNext'); if (n) n.focus(); } },
       { label: 'Folgetermin buchen …', onClick: () => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: P.addDays(a.date, 7), start: a.start }) },
       { label: 'Patientenakte …', onClick: () => openPatient(a.patientId) });
-    else items.push({ label: 'Blocker löschen', onClick: () => ask('Blocker löschen', '„' + esc(a.title) + '“ entfernen?', 'Löschen', () => { P.remove(a.id); renderCal(); toast('Blocker gelöscht'); }) });
+    else items.push({ label: 'Blocker löschen', onClick: () => ask('Blocker löschen', '„' + esc(a.title) + '“ entfernen?', 'Löschen', () => { releaseVideo(a); P.remove(a.id); renderCal(); toast('Blocker gelöscht'); }) });
     popMenu(pos, items);
   }
   const BLOCKER_PRESETS = ['Pause', 'Teambesprechung', 'Admin / Doku', 'Rückrufe', 'Hausbesuch', 'Pflegeheim-Visite', 'Urlaub', 'Fortbildung', 'Laborfahrer kommt', 'Notfall'];
@@ -717,7 +717,7 @@
       B.querySelector('#bkNext').innerHTML = Object.keys(byDay).map(d => `<div style="margin-top:3px"><b style="display:inline-block;width:92px">${P.weekday(d)}. ${d.slice(8)}.${d.slice(5, 7)}.</b>${byDay[d].map(x => `<button class="slotbtn" data-d="${d}" data-m="${x.start}" data-r="${x.parts[0].resId}">${P.fmtMin(x.start)}${x.viaType ? ' ' + esc((typeOf(x.viaType).name.match(/\(([^)]+)\)\s*$/) || [])[1] || '') : ''}</button>`).join('')}</div>`).join('') || '<div class="reason bad">Keine freien Termine in 21 Tagen.</div>';
       B.querySelectorAll('#bkNext .slotbtn').forEach(b => b.onclick = () => { bk.date = b.dataset.d; bk.start = +b.dataset.m; bk.resId = b.dataset.r; ui.date = bk.date; bkEval(); renderCalGrid(); renderCalSideMonths(); bkSyncInputs(); const s = st().settings; $('#calScroll').scrollTop = Math.max(0, (bk.start - s.dayStart - 45) * s.pxPerMin); });
     };
-    const done = a => { touchRecent(a.patientId); const msg = 'Termin gebucht: ' + P.fmtDate(a.date, true) + ' ' + P.fmtMin(a.start); ui.date = a.date; closeBooking(true); toast(msg); };
+    const done = a => { videoAfterBook(a); touchRecent(a.patientId); const msg = 'Termin gebucht: ' + P.fmtDate(a.date, true) + ' ' + P.fmtMin(a.start); ui.date = a.date; closeBooking(true); toast(msg); };
     B.querySelector('#bkBook').onclick = () => {
       if (bk.blocker) { if (bk.start == null) return; return done(P.blocker(bk.bres || bk.resId, bk.date, bk.start, bk.bdur, bk.title)); }
       if (!bk.patientId) return toast('Bitte Patient wählen');
@@ -742,6 +742,49 @@
     const who = x => esc(String(x || '?').split('@')[0]); const when = x => esc(String(x || '').replace('T', ' ').slice(0, 16));
     return ' · von ' + who(m.createdBy) + (m.updatedBy && m.version > 1 ? ' · zuletzt geändert ' + when(m.updatedAt) + ' von ' + who(m.updatedBy) : '');
   }
+  // ---------- Videosprechstunde (RED connect, KBV-zertifiziert) ----------
+  const RED_JOIN = 'https://video.redmedical.de/#/login?name={n}&code={c}';
+  function isVideoAppt(a) { return !!(a && a.patientId) && [a.typeId, a.viaType].some(id => id && /video/i.test((typeOf(id) || {}).name || '')); }
+  function videoHost(a) { const r = resOf((a.parts[0] || {}).resId); return (r && r.name) || 'Praxis'; }
+  function videoLinks(a) { const v = a.video; return { host: RED_JOIN.replace('{n}', encodeURIComponent(videoHost(a))).replace('{c}', v.host), client: RED_JOIN.replace('{n}', 'Patient').replace('{c}', v.client) }; }
+  async function createVideo(a) {
+    let v;
+    if (window.PKPSync && PKPSync.remote) {
+      const r = await PKPSync.api('video', { method: 'POST', body: JSON.stringify({ date: a.date, hostName: videoHost(a) }) }); const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || 'Video-Link konnte nicht erzeugt werden');
+      v = d;
+    } else {
+      const c = () => Array.from({ length: 3 }, () => Math.random().toString(36).slice(2, 5)).join('-');
+      v = { host: c(), client: c(), demo: true, validTo: P.addDays(a.date, 1) };
+    }
+    // während des Aufrufs kann der Live-Abgleich das Termin-Objekt ersetzt haben → aktuelles nehmen
+    const cur = st().appts.find(x => x.id === a.id); if (!cur) return null;
+    cur.video = { host: v.host, client: v.client, demo: !!v.demo, validTo: v.validTo, date: cur.date, at: new Date().toISOString() };
+    save(); return cur.video;
+  }
+  // bei Absage/Löschen/Verschieben: Patienten-Code bei RED entfernen (Link wird ungültig)
+  function releaseVideo(a) {
+    const v = a && a.video; if (!v) return; a.video = null;
+    if (!v.demo && window.PKPSync && PKPSync.remote) PKPSync.api('video/remove', { method: 'POST', body: JSON.stringify({ host: v.host, client: v.client }) }).then(r => { if (!r.ok) throw 0; }).catch(() => toast('Video-Link konnte bei RED nicht entfernt werden – bitte in RED löschen'));
+  }
+  function videoAfterBook(a) { if (isVideoAppt(a) && !a.video) createVideo(a).then(() => toast('Video-Link erzeugt – im Termin unter „Video“ an den Patienten schicken'), e => toast(e.message)); }
+  function videoMail(a) {
+    const p = patOf(a.patientId) || {}, L = videoLinks(a);
+    const subj = 'Ihre Videosprechstunde am ' + P.fmtDate(a.date, true) + ' um ' + P.fmtMin(a.start) + ' Uhr';
+    const body = 'Guten Tag,\n\nIhre Videosprechstunde ist am ' + P.fmtDate(a.date, true) + ' um ' + P.fmtMin(a.start) + ' Uhr.\n\nBitte öffnen Sie kurz vor dem Termin diesen Link (Handy, Tablet oder Computer mit Kamera und Mikrofon):\n' + L.client + '\n\nDer Link gilt nur für diesen Termin. Bitte halten Sie Ihre Versichertenkarte bereit.\n\nIhr Praxisteam';
+    return 'mailto:' + encodeURIComponent(p.email || '') + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
+  }
+  function videoHtml(a) {
+    if (!isVideoAppt(a) && !a.video) return '';
+    if (a.status === 'abgesagt') return '<div>Video</div><div class="muted">Link nach Absage entfernt</div>';
+    if (!a.video) return '<div>Video</div><div><button id="vMake">Video-Link erzeugen</button></div>';
+    const L = videoLinks(a);
+    return `<div>Video</div><div>${a.video.demo ? '<span class="chip">DEMO – noch ohne RED-Zugang</span> ' : ''}<a class="btn" href="${esc(L.host)}" target="_blank" rel="noopener"><button class="primary" type="button">▶ Video starten (Arzt)</button></a> <button id="vCopy" type="button">Patienten-Link kopieren</button> <a href="${esc(videoMail(a))}"><button type="button">per E-Mail an Patient</button></a><div class="muted" style="margin-top:3px">gültig am Termintag (RED connect), Patient braucht nur den Link</div></div>`;
+  }
+  function wireVideo(body, a) {
+    const mk = body.querySelector('#vMake'); if (mk) mk.onclick = () => createVideo(a).then(() => { closeDlg(); openAppt(a.id); }, e => toast(e.message));
+    const cp = body.querySelector('#vCopy'); if (cp) cp.onclick = () => { const u = videoLinks(a).client; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast('Patienten-Link kopiert'), () => dialog2('Patienten-Link', `<input style="width:100%" value="${esc(u)}" onfocus="this.select()">`, [{ label: 'OK' }])); };
+  }
   // ---------- Termin-Details ----------
   function openAppt(id) {
     const a = st().appts.find(x => x.id === id); if (!a) return;
@@ -755,24 +798,26 @@
       ${Object.entries(a.fields || {}).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}
       <div>Notiz</div><div><input id="dNote" value="${esc(a.note)}" style="width:100%"></div>
       <div>Status</div><div><select id="dStatus">${STATUS.map(s => `<option ${s === a.status ? 'selected' : ''}>${s}</option>`).join('')}</select>${a.arrivedAt ? ' <span class="muted">angekommen ' + esc(a.arrivedAt.slice(11, 16)) + '</span>' : ''}</div>
+      ${videoHtml(a)}
       <div>Angelegt</div><div class="muted">${esc((a.createdAt || '').replace('T', ' ').slice(0, 16))}${apptMetaHtml(a.id)}</div>
     </div>
     ${t ? `<h3>Verschieben</h3><div style="display:flex;gap:6px;align-items:end;flex-wrap:wrap"><div><label>Datum</label><input type="date" id="mDate" value="${a.date}"></div><div><label>Uhrzeit</label><input type="time" step="300" id="mTime" value="${P.fmtMin(a.start)}"></div><button id="mCheck">Prüfen</button><button id="mNext">Nächster freier</button></div><div id="mEval"></div>` : ''}`);
     const saveSimple = () => { a.note = body.querySelector('#dNote').value; const ns = body.querySelector('#dStatus').value; if (ns !== a.status) { if (ns === 'wartend' && !a.arrivedAt) a.arrivedAt = simIso(); a.status = ns; } };
     let mv = null;
     if (t) {
-      const check = () => { const d = body.querySelector('#mDate').value, m = P.parseHM(body.querySelector('#mTime').value); mv = { d, m, ev: P.evaluate(a.typeId, d, m, { ignoreAppt: a.id, patient: p }) }; body.querySelector('#mEval').innerHTML = reasonsHtml(mv.ev, { typeId: a.typeId, date: d, start: m, patientId: a.patientId, ignoreAppt: a.id }) + (mv.ev.ok ? ' <button class="primary" id="mDo">Hierhin verschieben</button>' : ' <button class="danger" id="mForce">trotzdem verschieben</button>'); body.querySelectorAll('#mEval [data-nextfree]').forEach(b => b.onclick = () => { const [nd, nm] = b.dataset.nextfree.split('|'); body.querySelector('#mDate').value = nd; body.querySelector('#mTime').value = P.fmtMin(+nm); check(); }); const doMove = (parts, over) => { a.date = d; a.start = m; a.parts = parts; a.overbooked = !!over; a.log = (a.log || []).concat([{ at: new Date().toISOString(), what: 'verschoben' }]); save(); closeDlg(); ui.date = d; rerender(); toast('verschoben'); }; const b1 = body.querySelector('#mDo'); if (b1) b1.onclick = () => { a.viaType = mv.ev.viaType || a.viaType || null; doMove(mv.ev.parts); }; const b2 = body.querySelector('#mForce'); if (b2) b2.onclick = () => doMove(P.forceParts(a.typeId, d, m, a.parts[0].resId).parts, true); };
+      const check = () => { const d = body.querySelector('#mDate').value, m = P.parseHM(body.querySelector('#mTime').value); mv = { d, m, ev: P.evaluate(a.typeId, d, m, { ignoreAppt: a.id, patient: p }) }; body.querySelector('#mEval').innerHTML = reasonsHtml(mv.ev, { typeId: a.typeId, date: d, start: m, patientId: a.patientId, ignoreAppt: a.id }) + (mv.ev.ok ? ' <button class="primary" id="mDo">Hierhin verschieben</button>' : ' <button class="danger" id="mForce">trotzdem verschieben</button>'); body.querySelectorAll('#mEval [data-nextfree]').forEach(b => b.onclick = () => { const [nd, nm] = b.dataset.nextfree.split('|'); body.querySelector('#mDate').value = nd; body.querySelector('#mTime').value = P.fmtMin(+nm); check(); }); const doMove = (parts, over) => { const vNew = a.video && a.video.date !== d; if (vNew) releaseVideo(a); a.date = d; a.start = m; a.parts = parts; a.overbooked = !!over; a.log = (a.log || []).concat([{ at: new Date().toISOString(), what: 'verschoben' }]); save(); closeDlg(); ui.date = d; rerender(); toast('verschoben'); if (vNew) videoAfterBook(a); }; const b1 = body.querySelector('#mDo'); if (b1) b1.onclick = () => { a.viaType = mv.ev.viaType || a.viaType || null; doMove(mv.ev.parts); }; const b2 = body.querySelector('#mForce'); if (b2) b2.onclick = () => doMove(P.forceParts(a.typeId, d, m, a.parts[0].resId).parts, true); };
       body.querySelector('#mCheck').onclick = check;
       body.querySelector('#mNext').onclick = () => { const s = P.findSlots(a.typeId, body.querySelector('#mDate').value, { days: 30, max: 1, fromMin: P.parseHM(body.querySelector('#mTime').value) + 5, ignoreAppt: a.id, patient: p })[0]; if (!s) return toast('nichts frei in 30 Tagen'); body.querySelector('#mDate').value = s.date; body.querySelector('#mTime').value = P.fmtMin(s.start); check(); };
     }
     dialog(t ? 'Termin' : 'Blocker', body, [
       { label: 'Löschen', cls: 'danger', keep: true, onClick: () => ask('Termin löschen', 'Termin endgültig löschen? (Absagen behält ihn in der Absage-Liste.)', 'Löschen', () => { P.remove(a.id); closeDlg(); rerender(); }) },
-      ...(a.patientId ? [{ label: 'Absagen', keep: true, onClick: () => { dialog2('Termin absagen', `<div class="kv"><div>Termin</div><div>${P.fmtDate(a.date, true)} ${P.fmtMin(a.start)} · ${esc(t ? t.name : '')}</div><div>Patient</div><div>${esc(patLabel(p))}</div></div><label>Grund</label><select id="cxR" style="width:100%"><option>Patient hat telefonisch abgesagt</option><option>Patient hat online abgesagt</option><option>Praxis sagt ab (Arzt verhindert)</option><option>Patient krank</option><option>Termin verschoben</option></select><label>Bemerkung</label><input id="cxN" style="width:100%"><label><input type="checkbox" id="cxF" checked> danach Folgetermin für den Patienten suchen</label>`, [{ label: 'Abbrechen' }, { label: 'Termin absagen', cls: 'primary', onClick: B => { a.status = 'abgesagt'; a.cancelReason = B.querySelector('#cxR').value + (B.querySelector('#cxN').value ? ' – ' + B.querySelector('#cxN').value : ''); a.cancelledAt = simIso(); const again = B.querySelector('#cxF').checked; save(); closeDlg(); rerender(); toast('abgesagt – Slot wieder frei'); if (again) defer(() => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: a.date, start: a.start }), 50); } }]); } },
+      ...(a.patientId ? [{ label: 'Absagen', keep: true, onClick: () => { dialog2('Termin absagen', `<div class="kv"><div>Termin</div><div>${P.fmtDate(a.date, true)} ${P.fmtMin(a.start)} · ${esc(t ? t.name : '')}</div><div>Patient</div><div>${esc(patLabel(p))}</div></div><label>Grund</label><select id="cxR" style="width:100%"><option>Patient hat telefonisch abgesagt</option><option>Patient hat online abgesagt</option><option>Praxis sagt ab (Arzt verhindert)</option><option>Patient krank</option><option>Termin verschoben</option></select><label>Bemerkung</label><input id="cxN" style="width:100%"><label><input type="checkbox" id="cxF" checked> danach Folgetermin für den Patienten suchen</label>`, [{ label: 'Abbrechen' }, { label: 'Termin absagen', cls: 'primary', onClick: B => { releaseVideo(a); a.status = 'abgesagt'; a.cancelReason = B.querySelector('#cxR').value + (B.querySelector('#cxN').value ? ' – ' + B.querySelector('#cxN').value : ''); a.cancelledAt = simIso(); const again = B.querySelector('#cxF').checked; save(); closeDlg(); rerender(); toast('abgesagt – Slot wieder frei'); if (again) defer(() => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: a.date, start: a.start }), 50); } }]); } },
         { label: 'Folgetermin', onClick: () => { defer(() => openNewAppt({ patientId: a.patientId, typeId: a.typeId, date: P.addDays(a.date, 7), start: a.start }), 50); } }] : []),
       { label: 'Schließen' },
       { label: 'Speichern', cls: 'primary', onClick: () => { saveSimple(); save(); rerender(); } },
     ]);
     const dp = body.querySelector('#dPat'); if (dp) dp.onclick = e => { e.preventDefault(); openPatient(p.id); };
+    wireVideo(body, a);
   }
 
   // =====================================================================
@@ -826,7 +871,7 @@
       const ev = P.evaluate(slot.typeId, slot.date, slot.start, { channel, patient: patOf(pid) });
       if (!ev.ok) { alert('Slot nicht mehr frei:\n' + ev.reasons.join('\n')); return false; }
       const f = {}; body.querySelectorAll('[data-field]').forEach(i => { if (i.value) f[i.dataset.field] = i.value; });
-      P.book({ typeId: slot.typeId, viaType: ev.viaType || null, date: slot.date, start: slot.start, parts: ev.parts }, { patientId: pid, fields: f, channel }); touchRecent(pid);
+      videoAfterBook(P.book({ typeId: slot.typeId, viaType: ev.viaType || null, date: slot.date, start: slot.start, parts: ev.parts }, { patientId: pid, fields: f, channel })); touchRecent(pid);
       toast('gebucht'); after && after();
     } }]);
   }
@@ -955,7 +1000,7 @@
         const needR = t.commentSets.some(c => /Grund/.test(c));
         dialog2('Termin bestätigen', `<div class="kv"><div>Termin</div><div>${P.fmtDate(s.date, true)} ${P.fmtMin(s.start)}</div><div>Terminart</div><div>${esc(t.name)}</div></div>${needR ? '<label>Beschwerden / Behandlungsgrund *</label><input id="obR" style="width:100%">' : ''}`, [{ label: 'Abbrechen' }, { label: 'Verbindlich buchen', cls: 'primary', onClick: B => {
           const reason = needR ? B.querySelector('#obR').value.trim() : ''; if (needR && !reason) { toast('Bitte Grund angeben'); return false; }
-          touchRecent(ob.patientId); P.book(s, { patientId: ob.patientId, channel: 'online', fields: reason ? { 'Beschwerden / Behandlungsgrund': reason } : {} });
+          touchRecent(ob.patientId); videoAfterBook(P.book(s, { patientId: ob.patientId, channel: 'online', fields: reason ? { 'Beschwerden / Behandlungsgrund': reason } : {} }));
           ob.done = P.fmtDate(s.date, true) + ' ' + P.fmtMin(s.start) + ' · ' + t.name; renderOnline();
         } }]);
       });

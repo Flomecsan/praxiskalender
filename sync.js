@@ -124,6 +124,8 @@
       return this._chain;
     },
     async _send(ops) {
+      // Basis-Version erst beim Senden setzen: der vorige Speichervorgang in der Kette kann sie gerade erhöht haben
+      for (const o of ops) o.baseVersion = (this.meta[o.col][o.id] || {}).version || 0;
       const r = await this.api('ops', { method: 'POST', body: JSON.stringify({ ops, client: this.clientId }) });
       if (r.status === 409) {
         const d = await r.json();
