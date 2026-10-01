@@ -823,7 +823,7 @@
   }
   // ---------- Videosprechstunde (RED connect, KBV-zertifiziert) ----------
   const RED_JOIN = 'https://video.redmedical.de/#/login?name={n}&code={c}';
-  function isVideoAppt(a) { return !!(a && a.patientId) && [a.typeId, a.viaType].some(id => id && /video/i.test((typeOf(id) || {}).name || '')); }
+  function isVideoAppt(a) { return !!(a && a.patientId) && [a.typeId, a.viaType].some(id => id && (typeOf(id) || {}).video); }
   function videoHost(a) { const r = resOf((a.parts[0] || {}).resId); return (r && r.name) || 'Praxis'; }
   function videoLinks(a) { const v = a.video; return { host: RED_JOIN.replace('{n}', encodeURIComponent(videoHost(a))).replace('{c}', v.host), client: RED_JOIN.replace('{n}', 'Patient').replace('{c}', v.client) }; }
   async function createVideo(a) {
@@ -1080,7 +1080,7 @@
         dialog2('Termin bestätigen', `<div class="kv"><div>Termin</div><div>${P.fmtDate(s.date, true)} ${P.fmtMin(s.start)}</div><div>Terminart</div><div>${esc(t.name)}</div></div>${needR ? '<label>Beschwerden / Behandlungsgrund *</label><input id="obR" style="width:100%">' : ''}`, [{ label: 'Abbrechen' }, { label: 'Verbindlich buchen', cls: 'primary', onClick: B => {
           const reason = needR ? B.querySelector('#obR').value.trim() : ''; if (needR && !reason) { toast('Bitte Grund angeben'); return false; }
           touchRecent(ob.patientId); videoAfterBook(P.book(s, { patientId: ob.patientId, channel: 'online', fields: reason ? { 'Beschwerden / Behandlungsgrund': reason } : {} }));
-          ob.done = P.fmtDate(s.date, true) + ' ' + P.fmtMin(s.start) + ' · ' + t.name; renderOnline();
+          ob.done = P.fmtDate(s.date, true) + ' ' + P.fmtMin(s.start) + ' · ' + t.name + (t.video ? ' – Videosprechstunde: Ihren persönlichen Link erhalten Sie per E-Mail' : ''); renderOnline();
         } }]);
       });
     }

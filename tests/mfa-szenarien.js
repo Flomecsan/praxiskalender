@@ -1,4 +1,4 @@
-// MFA-Alltag: 50 Szenarien, die über die Oberfläche klicken und das Ergebnis prüfen.
+// MFA-Alltag: 51 Szenarien, die über die Oberfläche klicken und das Ergebnis prüfen.
 // Start im Browser (Konsole oder per Werkzeug):  runMfaSzenarien()
 // Achtung: setzt die Testdaten zurück (frische 100 Testpatienten).
 (function () {
@@ -405,6 +405,16 @@
     run(50, 'Seitenreiter mit Text statt nur Symbol', () => {
       const t = $$('.sideTabs button').map(b => b.innerText.trim()); assert(['Zuletzt', 'Tagesliste', 'Wartezimmer', 'Recall', 'Todos'].every(x => t.some(y => y.startsWith(x))), 'Reiter: ' + t.join(','));
       return t.join(' · ');
+    });
+    // 51
+    run(51, 'Patient bucht online „Krankschreibung über Videosprechstunde“ → nächster freier Arzt, Video-Link, Hinweis an Patient', () => {
+      const p = S().patients.find(x => x.insurance === 'GKV' && !S().appts.some(a => a.patientId === x.id && a.date === D0)); U.go('online');
+      setVal($('#obP'), p.id); click([...$$('#p-online [data-c]')].find(b => /Krankschreibung über Video/.test(b.dataset.c)));
+      click([...$$('#p-online [data-t]')].find(b => b.dataset.t === T('Krankschreibung über Videosprechstunde (Arzt egal)'))); const sb = $('#obS button[data-i]'); assert(sb, 'online keine Zeiten');
+      click(sb); const r = $('#obR'); if (r) setVal(r, 'Erkältung, AU'); click([...$$('#dlg2Foot button')].pop());
+      const a = S().appts.filter(x => x.patientId === p.id && x.channel === 'online').pop(); assert(a, 'nicht gebucht'); assert(a.video, 'kein Video-Link');
+      assert(/Link erhalten Sie per E-Mail/.test($('#p-online .reason.ok').innerText), 'Hinweis an Patient fehlt');
+      return P.fmtMin(a.start) + ' bei ' + X().types.get(a.viaType).name;
     });
     closeAll(); $('#calSearch').value = ''; U.ui.date = D0; U.go('kalender');
     const ok = results.filter(r => r.ok).length;
