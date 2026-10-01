@@ -1316,7 +1316,7 @@
     $('#loading').style.display = 'none';
     tickClock(); setInterval(() => { tickClock(); if (ui.page === 'warteliste') renderWaitlist(); }, 30000);
     $('#dlgX').onclick = closeDlg; initLayout(); $('#fbBtn').onclick = openFeedback;
-    if (PKPSync && PKPSync.remote) wireSync();
+    if (window.PKPSync && PKPSync.remote) wireSync();
     renderStatusBar();
     renderCal();
   })();
