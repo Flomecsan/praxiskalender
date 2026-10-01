@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Praxiskalender Prototyp</title>
+<style>
+/* Optik nach samedi x.time (ExtJS classic + neue Topbar), Werte aus der Live-Oberfläche gemessen */
+:root{
+  --top:#104080; --link:#0067b2; --ink:#000; --txt:#4d4d4d; --muted:#808080; --muted2:#b3b3b3;
+  --line:#e6e6e6; --grid:#e3e3e3; --gridh:#cccccc; --closed:#dedede;
+  --ext-bg:#dfe8f6; --ext-border:#99bbe8; --ext-title:#15428b; --ext-field:#b5b8c8;
+  --sel:#dfe8f6; --hover:#eef3fb;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--top);color:var(--ink);font:12px arial,tahoma,helvetica,sans-serif;display:flex;flex-direction:column}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{background:#fff;border:1px solid var(--ext-field);border-radius:0;padding:2px 4px;font:12px arial,tahoma,helvetica,sans-serif;height:22px}
+textarea{height:auto;width:100%;min-height:56px}
+select[multiple],select[size]{height:auto}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#7eadd9}
+label{display:block;margin:6px 0 2px;color:#000;font-size:11px}
+/* ExtJS-Buttons */
+button{cursor:pointer;font:11px arial,tahoma,helvetica,sans-serif;background:linear-gradient(#ffffff,#e4e4e4);border:1px solid #b5b5b5;border-radius:3px;padding:3px 10px;min-height:22px;color:#000}
+button:hover{background:linear-gradient(#ffffff,#d9e6f5);border-color:#99bbe8}
+button.primary{font-weight:700}
+button.danger{color:#b00}
+button.small{padding:1px 6px;min-height:18px}
+button.flat{background:#fff;border:1px solid var(--line);color:var(--link);font-size:14px;padding:6px 15px;border-radius:3px}
+button.flat:hover{background:#f4f8fd}
+button.icon{background:none;border:none;padding:4px 6px;min-height:0;color:#666}
+button.icon:hover{background:#eef2f7;border-radius:4px}
+button.icon.on{background:#666;color:#fff;border-radius:4px}
+.ico{width:16px;height:16px;vertical-align:middle;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.ico.lg{width:20px;height:20px}
+/* Topbar */
+nav#top{background:var(--top);display:flex;align-items:center;gap:3px;padding:0 10px 0 15px;height:50px;flex:none;overflow-x:auto}
+nav#top .brand{display:flex;align-items:center;gap:8px;margin-right:18px;white-space:nowrap}
+nav#top .brand b{display:inline-block;width:26px;height:26px;border-radius:50%;background:#c8d27a;color:var(--top);font:700 13px/26px arial;text-align:center}
+nav#top a{color:#fff;text-decoration:none;padding:9px 10px;border-radius:3px;white-space:nowrap;font-size:14px;display:flex;align-items:center;gap:5px;cursor:pointer;height:34px}
+nav#top a .ico{width:18px;height:18px}
+nav#top a.active{background:#fff;color:var(--top)}
+nav#top a:hover:not(.active){background:#1b4f93}
+nav#top .spacer{flex:1}
+nav#top .clock{font-size:12px;color:#c9d6ea;white-space:nowrap;margin-right:6px}
+nav#top .tbtn{color:#fff;padding:6px 8px}
+nav#top .tbtn .ico{width:20px;height:20px}
+main{flex:1;min-height:0;display:flex;background:#fff}
+.page{flex:1;min-width:0;display:none;flex-direction:column;overflow:auto;background:#fff}
+.page.active{display:flex}
+.pad{padding:10px 12px}
+/* ExtJS-Panels für Nebenmodule */
+.toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 8px;background:linear-gradient(#f3f7fd,#d6e3f3);border-bottom:1px solid var(--ext-border);min-height:30px}
+.toolbar .title{font-weight:700;color:var(--ext-title);font-size:12px;margin-right:8px}
+.card{background:#fff;border:1px solid var(--ext-border);margin-bottom:10px}
+.card>h3:first-child,.card>.ph{margin:0;padding:5px 8px;background:linear-gradient(#dae7f6,#c9dcf2);border-bottom:1px solid var(--ext-border);color:var(--ext-title);font:700 11px arial}
+.card>*:not(h3:first-child){margin-left:8px;margin-right:8px}
+.card>:last-child{margin-bottom:8px}
+h2{font:700 13px arial;color:var(--ext-title);margin:4px 0 10px}
+h3{font:700 11px arial;color:var(--ext-title);margin:10px 0 4px}
+.muted{color:var(--muted)} .ok{color:#2e7d32} .bad{color:#c00} .warn{color:#b26a00}
+table.grid{border-collapse:collapse;width:100%;background:#fff;font-size:11px}
+table.grid th,table.grid td{border-bottom:1px solid #ededed;padding:3px 5px;text-align:left;vertical-align:top}
+table.grid th{position:sticky;top:0;background:linear-gradient(#f9f9f9,#e3e4e6);border-bottom:1px solid #d0d0d0;border-right:1px solid #d0d0d0;font-weight:400;z-index:1}
+table.grid tr:nth-child(even) td{background:#fafafa}
+table.grid tr:hover td{background:var(--hover)}
+.chip{display:inline-block;padding:0 5px;border-radius:2px;font-size:10px;border:1px solid #c5d5ea;background:#eef4fb;margin:1px 2px 1px 0;white-space:nowrap}
+.dot{display:inline-block;width:10px;height:10px;vertical-align:middle;margin-right:4px;border:1px solid}
+.cols{display:flex;gap:10px;flex-wrap:wrap}.cols>*{flex:1;min-width:250px}
+/* ---------- Kalender ---------- */
+#calMain{flex:1;display:flex;min-width:0;min-height:0}
+#calLeft{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid #c5d0df}
+#calBar{display:flex;align-items:center;height:40px;padding:0 8px;gap:4px;border-bottom:1px solid var(--line);position:relative;flex:none}
+#calBar .sep{width:1px;height:28px;background:var(--line);margin:0 8px}
+#calTitle{position:absolute;left:50%;transform:translateX(-50%);font-size:15px;color:var(--link);white-space:nowrap;pointer-events:none}
+#calTitle b{font-weight:700}
+#calTitle .kw{color:var(--muted2)}
+#calScroll{flex:1;overflow:auto;position:relative;background:#fff}
+#calGrid{position:relative;display:flex;min-width:100%}
+.timecol{position:sticky;z-index:6;background:#fff;width:25px;flex:none}
+.timecol.l{left:0;border-right:1px solid var(--line)}
+.timecol.r{right:0;border-left:1px solid var(--line)}
+.colhead{position:sticky;top:0;z-index:5;height:31px;background:#fff;border-bottom:1px solid var(--line);font-size:14px;color:var(--txt);padding:8px 4px 0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border-radius:5px 5px 0 0;cursor:pointer}
+.colhead .cd{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 6px 1px 2px;background:#c9e4dc}
+.timecol .colhead{z-index:7;cursor:default}
+.tl{position:absolute;left:0;width:25px;height:15px;font-size:10px;color:#666;padding-left:4px;line-height:15px}
+.tl.h{font-size:14px;font-weight:700;color:var(--txt);line-height:15px}
+.timecol.r .tl{padding-left:2px}
+.rcol{position:relative;flex:1 0 100px;min-width:100px;border-right:1px solid #d9d9d9}
+.rbody{position:relative;cursor:default;background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 14px,var(--grid) 14px,var(--grid) 15px)}
+.closed{position:absolute;left:0;right:0;background:var(--closed);border-bottom:1px solid #d2d2d2}
+.hline{position:absolute;left:0;right:0;border-top:1px solid var(--gridh);pointer-events:none}
+.roster{position:absolute;left:0;right:0;font-size:11px;line-height:12px;padding:1px 3px;overflow:hidden;pointer-events:none}
+.ev{position:absolute;z-index:2}
+.ev .inner{position:absolute;inset:0;border:1px solid;padding:1px 2px 0 3px;font-size:11px;line-height:12.1px;overflow:hidden;cursor:pointer;color:#000;word-break:break-word}
+.ev:hover{z-index:4}
+.ev:hover .inner{bottom:auto;min-height:100%;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.ev .inner b{font-weight:700}
+.ev.done .inner{text-decoration:line-through}
+.ev.blocker .inner{font-style:normal}
+.ev.over .inner{outline:2px dashed #c00;outline-offset:-2px}
+.ev .cm{display:inline-block;width:14px;height:12px;vertical-align:-1px;margin-right:2px}
+.ev .stx{float:right;margin:-1px -1px 0 2px;font-size:13px;line-height:13px;text-decoration:none!important;display:inline-block;min-width:14px;text-align:center}
+.ev .stx.act{cursor:pointer;border-radius:3px}
+.ev .stx.act:hover{background:rgba(255,255,255,.85);box-shadow:0 0 0 1px #99bbe8}
+.ev .corner{position:absolute;left:0;top:0;width:0;height:0;border-style:solid;border-width:11px 11px 0 0;border-color:#fd5e5e transparent transparent transparent}
+.ev .corner.web{border-color:#5aa0e8 transparent transparent transparent}
+.nowline{position:absolute;left:0;right:0;border-top:2px solid #e53935;z-index:3;pointer-events:none}
+.ghost{position:absolute;left:0;right:0;background:rgba(0,103,178,.12);border:1px dashed var(--link);pointer-events:none;z-index:1;display:none;height:15px}
+#calFoot{display:flex;align-items:center;gap:6px;height:56px;padding:0 10px;border-top:1px solid var(--line);flex:none;background:#fff}
+#calFoot .grp{display:flex;background:#f0f0f0;border-radius:5px;padding:2px}
+#calSearchWrap{flex:1;position:relative}
+#calSearchWrap .ico{position:absolute;left:12px;top:12px;color:#666}
+#calSearch{width:100%;height:40px;background:#e8f0fe;border:0;border-radius:5px;padding:12px 14px 12px 38px;font:14px arial}
+/* rechte Spalte */
+#calSide{width:34%;min-width:300px;max-width:75vw;flex:none;display:flex;flex-direction:column;background:#fff;overflow:hidden}
+.mcHead{display:flex;align-items:center;justify-content:space-between;height:40px;padding:0 10px;border-bottom:1px solid var(--line)}
+.mcHead .mt{font:700 12px arial;color:var(--txt)} .mcHead .mt span{font-weight:400;color:var(--muted2)}
+.mcHead .today{color:var(--link);font-weight:700}
+.mcHead button{background:none;border:0;color:var(--link);font-size:16px;min-height:0;padding:0 4px}
+.mcs{display:flex;border-bottom:1px solid var(--line)}
+.mc{flex:1;border-collapse:collapse;table-layout:fixed}
+.mc th{font:10px arial;color:var(--muted);height:30px;background:#fff;border-bottom:1px solid var(--line)}
+.mc td{text-align:center;height:24px;padding:2px 0}
+.mc th.we,.mc td.we{background:#e6e6e6}
+.mc td span{display:inline-block;width:24px;height:24px;line-height:22px;border:1px solid transparent;border-radius:3px;font-size:11px;color:#666;cursor:pointer}
+.mc td.we span{color:var(--muted2)}
+.mc td.o span{color:#d4d4d4}
+.mc td span:hover{border-color:#99bbe8}
+.mc td.s span{background:var(--top);border-color:var(--top);color:#fff}
+.mc td.t span{font-weight:700;color:var(--link)}
+.mc td.s.t span{color:#fff}
+.sideBtns{display:flex;padding:8px;gap:0;border-bottom:1px solid var(--line)}
+.sideBtns button{flex:1;background:#fff;border:1px solid var(--line);border-radius:0;font:700 14px arial;color:var(--txt);height:40px;display:flex;align-items:center;justify-content:center;gap:8px}
+.sideBtns button:first-child{border-radius:5px 0 0 5px}.sideBtns button:last-child{border-radius:0 5px 5px 0;border-left:0}
+.sideBtns button .ico{color:#5b84c4;width:18px;height:18px}
+.sideTabs{display:flex;border-bottom:1px solid #a9bfe0;padding:6px 6px 0}
+.sideTabs button{background:#fff;border:0;border-right:1px solid var(--line);border-radius:5px 5px 0 0;color:#555;padding:5px 14px;min-height:0}
+.sideTabs button.on{background:#808080;color:#fff}
+.sideTabs button .ico{width:20px;height:20px}
+#sideList{flex:1;overflow:auto;font-size:11px}
+.sl{display:flex;align-items:center;padding:4px 6px;border-bottom:1px solid #f0f0f0;gap:4px;cursor:pointer}
+.sl:first-child{background:#dfe8f6;font-weight:700}
+.sl:hover{background:var(--hover)}
+.sl .nm{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sl .a{color:#4a7cc0;cursor:pointer;display:inline-flex}
+.sl .a.g{color:#3aa65a}
+.sl .a .ico{width:14px;height:14px}
+/* Popup-Menü */
+.menu{position:fixed;z-index:60;background:#fff;border:1px solid var(--ext-border);box-shadow:0 3px 10px rgba(0,0,0,.2);min-width:220px;font-size:11px}
+.menu div{padding:5px 10px;cursor:pointer}.menu div:hover{background:var(--sel)}
+.menu div.on{font-weight:700}
+.menu div.sep{height:1px;padding:0;margin:3px 0;background:#d6e0ee;cursor:default}
+/* ExtJS-Fenster */
+.xwin{border:1px solid var(--ext-border);border-radius:5px 5px 0 0;padding:0;max-width:min(900px,97vw);width:900px;background:var(--ext-bg);color:#000;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.xwin::backdrop{background:rgba(204,204,204,.5)}
+.xwin .dh{display:flex;justify-content:space-between;align-items:center;padding:5px 6px 4px 8px;background:linear-gradient(#dae7f6,#c3d7f0);border-bottom:1px solid var(--ext-border);font:700 11px arial;color:var(--ext-title)}
+.xwin .dh button{min-height:0;padding:0 5px;font-size:11px}
+.xwin .db{padding:8px 10px;max-height:74vh;overflow:auto;background:var(--ext-bg)}
+.xwin .df{display:flex;gap:6px;justify-content:flex-end;padding:6px 10px 8px;background:var(--ext-bg);flex-wrap:wrap}
+fieldset{border:1px solid var(--ext-border);background:var(--ext-bg);padding:4px 8px 8px;margin:0 0 8px}
+legend{color:var(--ext-title);font:700 11px arial;padding:0 3px}
+.list{max-height:240px;overflow:auto;border:1px solid var(--ext-field);background:#fff}
+.list div.it{padding:3px 6px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:11px}
+.list div.it:hover{background:var(--hover)}
+.list div.it.sel{background:#c6dbf5}
+.reason{background:#fff;border:1px solid #c5d5ea;padding:4px 6px;margin:4px 0;font-size:11px}
+.reason.ok{border-color:#9ccc9c;background:#f0fbf0}
+.reason.bad{border-color:#e3a3a3;background:#fff5f5}
+.slotbtn{margin:2px;padding:2px 7px;font-size:11px}
+.bar{height:10px;background:#5b84c4;min-width:1px}
+.wl-row td{font-size:11px}
+.wl-warn td{background:#fff3c4!important} .wl-alert td{background:#ffd6d6!important}
+.tabs{display:flex;gap:2px;flex-wrap:wrap;margin-bottom:0;border-bottom:1px solid var(--ext-border);padding:4px 4px 0;background:linear-gradient(#f3f7fd,#d6e3f3)}
+.tabs button{border-radius:3px 3px 0 0;border-bottom:0;background:linear-gradient(#f2f6fb,#dfe8f6);color:#15428b}
+.tabs button.active{background:#fff;font-weight:700;position:relative;top:1px}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:3px 10px;font-size:11px}
+.kv>div:nth-child(odd){color:#555}
+.toast{position:fixed;bottom:70px;left:40%;transform:translateX(-50%);background:#ffffe1;color:#000;border:1px solid #c7c79a;padding:6px 12px;z-index:99;opacity:0;transition:opacity .2s;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.toast.on{opacity:1}
+.widget{max-width:640px;margin:0 auto}
+.step{border-left:3px solid #5b84c4;padding-left:10px;margin:12px 0}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:100;font-size:14px;color:var(--ext-title)}
+
+nav#top .brand img{height:42px;background:#fff;border-radius:4px;padding:2px 4px}
+nav#top .brand .bt1{display:flex;flex-direction:column;line-height:1.05;color:#fff;font:700 15px arial}
+nav#top .brand .bt1 small{font:400 11px arial;color:#c9d6ea}
+/* Buchungsfenster rechts unten + buchbare Zeiten */
+.bt{position:absolute;left:0;right:0;background:rgba(92,184,92,.30);border-top:1px solid rgba(92,184,92,.55);cursor:pointer;z-index:1}
+.bt:hover{background:rgba(92,184,92,.6)}
+.bt.alt{background:rgba(92,184,92,.14);border-top-color:rgba(92,184,92,.35)}
+.bt.alt:hover{background:rgba(92,184,92,.45)}
+.bsel{position:absolute;left:0;right:0;border:2px solid #0067b2;background:rgba(0,103,178,.18);z-index:3;pointer-events:none}
+.bsel.bad{border:2px dashed #c00;background:rgba(200,0,0,.08)}
+#bkPanel{flex:1;display:flex;flex-direction:column;min-height:0;border-top:1px solid var(--ext-border);background:var(--ext-bg);margin-top:4px}
+.bkHead{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:linear-gradient(#dae7f6,#c3d7f0);border-bottom:1px solid var(--ext-border);font:700 11px arial;color:var(--ext-title)}
+.bkHead button{min-height:0;padding:0 5px}
+.bkBody{flex:1;overflow:auto;padding:6px 8px}
+.bkBody fieldset{margin-bottom:6px}
+.bkFoot{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;border-top:1px solid var(--ext-border);background:var(--ext-bg)}
+button:disabled{opacity:.45;cursor:default}
+
+/* Fenster ziehen + Größe ändern (wie ExtJS-Fenster) */
+.xwin{resize:both;overflow:hidden;min-width:360px;min-height:180px;display:none;flex-direction:column}
+.xwin[open]{display:flex}
+.xwin .db{flex:1;max-height:none!important;min-height:0}
+.xwin .dh{cursor:move;user-select:none}
+.xwin.moved{margin:0;position:fixed}
+#splitter{width:6px;flex:none;cursor:col-resize;background:linear-gradient(90deg,#e6e6e6,#f7f7f7,#e6e6e6);border-left:1px solid #d0d7e2;border-right:1px solid #d0d7e2}
+#splitter:hover,#splitter.drag{background:#c6dbf5}
+#bkSplit{height:6px;flex:none;cursor:row-resize;background:#eef2f7;border-top:1px solid #d0d7e2;border-bottom:1px solid #d0d7e2}
+#bkSplit:hover,#bkSplit.drag{background:#c6dbf5}
+@media print{nav#top,#calSide,#calFoot,#calBar button{display:none!important} #calScroll{overflow:visible}}
+</style>
+</head>
+<body>
+<div class="loading" id="loading">Lade Prototyp … beim ersten Start werden 100 Testpatienten und Testtermine erzeugt.</div>
+<nav id="top">
+  <span class="brand"><img src="assets/wsh-logo.png?v=1790872731" alt="WirSindHausärzte" title="WirSindHausärzte"><span class="bt1">Praxiskalender<small>Flintsbach</small></span></span>
+  <a data-page="kalender" class="active" data-ico="cal">Kalender</a>
+  <a data-page="callcenter" data-ico="people">Call-Center</a>
+  <a data-page="warteliste" data-ico="clock">Warteliste</a>
+  <a data-page="statistik" data-ico="stats">Statistik</a>
+  <a data-page="patienten" data-ico="card">Patienten</a>
+  <a data-page="recall" data-ico="mega">Recall</a>
+  <a data-page="online" data-ico="globe">Online-Buchung</a>
+  <a data-page="todos" data-ico="check">Todos</a>
+  <span class="spacer"></span>
+  <span class="clock" id="clock"></span>
+  <a class="tbtn" data-page="einstellungen" data-ico="gear" title="Einstellungen"></a>
+</nav>
+<main>
+  <section class="page active" id="p-kalender">
+    <div id="calMain">
+      <div id="calLeft">
+        <div id="calBar">
+          <button class="icon" id="calCols" title="Spalten der Ansicht bearbeiten" data-ico="gear"></button>
+          <button class="icon" id="calViewBtn" title="Gespeicherte Institutions-Ansichten" data-ico="views"></button>
+          <span class="sep"></span>
+          <button class="flat" id="calToday">Heute</button>
+          <button class="icon" id="calPrev" data-ico="left" style="color:var(--link)"></button>
+          <button class="icon" id="calNext" data-ico="right" style="color:var(--link)"></button>
+          <select id="calWeekRes" style="display:none;margin-left:8px"></select>
+          <div id="calTitle"></div>
+        </div>
+        <div id="calScroll"><div id="calGrid"></div></div>
+        <div id="calFoot">
+          <div class="grp"><button class="icon" id="calDay" title="Tagesansicht" data-ico="day"></button><button class="icon" id="calWeek" title="Wochenansicht" data-ico="week"></button></div>
+          <button class="icon" id="calPrint" title="Druckansicht" data-ico="print"></button>
+          <button class="icon" id="calList" title="Terminliste" data-ico="clip"></button>
+          <button class="icon" id="calWait" title="Warteliste" data-ico="alarm"></button>
+          <form id="calSearchWrap" autocomplete="off"><span data-ico="search"></span><input id="calSearch" placeholder="Terminsuche (Patient, Geburtsdatum, Terminart)"></form>
+          <button class="icon" id="calCancelled" title="Liste der zuletzt abgesagten Termine einsehen" data-ico="trash"></button>
+        </div>
+      </div>
+      <div id="splitter" title="Breite ziehen"></div>
+      <aside id="calSide"></aside>
+    </div>
+  </section>
+  <section class="page" id="p-callcenter"></section>
+  <section class="page" id="p-warteliste"></section>
+  <section class="page" id="p-patienten"></section>
+  <section class="page" id="p-online"></section>
+  <section class="page" id="p-recall"></section>
+  <section class="page" id="p-statistik"></section>
+  <section class="page" id="p-todos"></section>
+  <section class="page" id="p-einstellungen"></section>
+</main>
+<dialog id="dlg" class="xwin"><div class="dh"><span id="dlgTitle"></span><button id="dlgX" title="Schließen">✕</button></div><div class="db" id="dlgBody"></div><div class="df" id="dlgFoot"></div></dialog>
+<dialog id="dlg2" class="xwin" style="width:520px"><div class="dh"><span id="dlg2Title"></span><button id="dlg2X" title="Schließen">✕</button></div><div class="db" id="dlg2Body"></div><div class="df" id="dlg2Foot"></div></dialog>
+<div class="toast" id="toast"></div>
+<script src="data.js?v=1790877396"></script>
+<script src="engine.js?v=1790877396"></script>
+<script src="ui.js?v=1790877396"></script>
+</body>
+</html>
